@@ -1,0 +1,24 @@
+# https://github.com/YDLIDAR/YDLidar-SDK/issues/8
+ydlidar_ros2_driver_node:
+  ros__parameters:
+    port: /dev/usb_ydlidar
+    frame_id: laser
+    ignore_array: ""
+    baudrate: 115200
+    lidar_type: 1   # 0:TYPE_TOF, 1:TYPE_TRIANGLE 2:TYPE_TOF_NET
+    device_type: 0   # 0:YDLIDAR_TYPE_SERIAL, 1:YDLIDAR_TYPE_TCP
+    sample_rate: 3
+    abnormal_check_count: 4
+    fixed_resolution: true
+    reversion: true
+    inverted: true
+    auto_reconnect: true
+    isSingleChannel: true
+    intensity: false
+    support_motor_dtr: true
+    angle_max: 180.0
+    angle_min: -180.0
+    range_max: 64.0
+    range_min: 0.01
+    frequency: 10.0
+    invalid_range_is_inf: false

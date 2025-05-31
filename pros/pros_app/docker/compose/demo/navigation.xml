@@ -1,0 +1,12 @@
+<launch>
+    <arg name="map_file" default="$(dirname)/map/map01/map01.yaml"/>
+    <arg name="params_file" default="$(dirname)/mapper_params.yaml"/>
+    <arg name="use_sim_time" default="false"/>
+
+    <include file="$(find-pkg-share nav2_bringup)/launch/navigation_launch.py">
+        <arg name="map" value="$(var map_file)"/>
+        <arg name="use_sim_time" value="$(var use_sim_time)"/>
+        <arg name="params_file" value="$(var params_file)"/>
+        <arg name="autostart" value="true"/>
+    </include>
+</launch>

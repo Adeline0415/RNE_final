@@ -1,0 +1,14 @@
+services:
+  rplidar:
+    image: ghcr.io/screamlab/pros_jetson_driver_image:0.1.0
+    env_file:
+      - .env
+    volumes:
+      - ./demo:/workspace/demo:ro
+    networks:
+      - my_bridge_network
+    command: "ros2 launch /workspace/demo/rplidar_unity.xml"
+
+networks:
+  my_bridge_network:
+    driver: bridge

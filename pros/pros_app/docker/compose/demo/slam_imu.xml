@@ -1,0 +1,20 @@
+<launch>
+    <!-- 
+        啟動 rplidar 並執行 SLAM
+        SLAM 需匯入一個參數檔案。
+     -->
+    <!-- <node name="rplidar" pkg="rplidar_ros" exec="rplidar_composition" output="screen">
+        <param name="serial_port" value="/dev/tty-rplidar" /> 
+        <param name="serial_baudrate" value="115200" />
+        <param name="frame_id" value="laser" />
+        <param name="inverted" value="false" />
+        <param name="angle_compensate" value="true" />
+    </node> -->
+
+    <arg name="slam_params_file_path" default="$(dirname)/slam_params_imu.yaml"/>
+    <include file="$(find-pkg-share slam_toolbox)/launch/online_sync_launch.py">
+        <arg name="slam_params_file" value="$(var slam_params_file_path)"/>
+    </include>
+
+
+</launch>

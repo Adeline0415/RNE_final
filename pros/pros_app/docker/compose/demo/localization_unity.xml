@@ -1,0 +1,15 @@
+<launch>
+    <!-- 一起跑滿容易出錯的，因此可以先啟動好 rplidar 再執行 localization -->
+    <include file="$(dirname)/rplidar_unity.xml"/>
+
+    <!-- Specify the full path to your map file -->
+    <arg name="map_file" default="$(dirname)/map/map01/map01.yaml"/>
+
+    <arg name="params_file" default="$(dirname)/mapper_params.yaml"/>
+
+    <include file="$(find-pkg-share nav2_bringup)/launch/localization_launch.py">
+        <arg name="slam" value="False"/>
+        <arg name="map" value="$(var map_file)"/>
+        <arg name="params_file" value="$(var params_file)"/>
+    </include>
+</launch>

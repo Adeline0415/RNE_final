@@ -1,0 +1,25 @@
+<launch>
+    <!-- 
+        啟動 RPLidar 蒐集scan資料
+        發布TF from base_footprint to laser 
+        使用ros2_laser_scan_matcher 發布TF from odom to base_footprint
+    -->
+    <node name="rplidar" pkg="rplidar_ros" exec="rplidar_node" output="screen">
+        <!-- TODO -->
+        <param name="serial_port" value="/dev/usb_lidar"/>
+        <param name="serial_baudrate" value="256000"/>
+        <param name="frame_id" value="laser"/>
+        <param name="inverted" value="false"/>
+        <param name="angle_compensate" value="true"/>
+    </node>
+    <node pkg="tf2_ros" exec="static_transform_publisher" name="base_to_laser_tf"
+          args="0.0 0.0 0.15 3.14 0.0 0.0 base_footprint laser"/>
+    <!--  x   y   z    yaw pitch roll  -->
+    <node name="scan_matcher" pkg="ros2_laser_scan_matcher" exec="laser_scan_matcher" output="screen">
+        <param name="base_frame" value="base_footprint"/>
+        <param name="publish_tf" value="true"/>
+        <param name="publish_odom" value="odom"/>
+
+    </node>
+
+</launch>

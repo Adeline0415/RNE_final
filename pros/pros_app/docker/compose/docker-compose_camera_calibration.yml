@@ -1,0 +1,18 @@
+services:
+  calibration:
+    image: ghcr.io/screamlab/pros_camera_calibration:latest
+    env_file:
+      - .env
+    volumes:
+      - ./demo:/workspace/demo:ro
+      - /tmp/.X11-unix:/tmp/.X11-unix  # 掛載 X11 套接字
+      - ./camera_calibration_params:/tmp
+    environment:
+      - DISPLAY=${DISPLAY}
+    networks:
+      - my_bridge_network
+    command: "ros2 run camera_calibration cameracalibrator --size 6x9 --square 0.025 --ros-args -r image:=/camera/color/image_raw -p camera:=/my_camera"
+
+networks:
+  my_bridge_network:
+    driver: bridge

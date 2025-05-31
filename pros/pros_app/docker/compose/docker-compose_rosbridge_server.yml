@@ -1,0 +1,17 @@
+services:
+  rosbridge:
+    image: ghcr.io/screamlab/pros_base_image:0.0.2
+    env_file:
+      - .env
+    networks:
+      - my_bridge_network
+    ports:
+      - 9090:9090
+    command: "ros2 launch rosbridge_server rosbridge_websocket_launch.xml"
+
+# This will create a docker bridge network
+# docker network create --driver bridge pros_app_my_bridge_network
+# You can see the network by docker network ls
+networks:
+  my_bridge_network:
+    driver: bridge

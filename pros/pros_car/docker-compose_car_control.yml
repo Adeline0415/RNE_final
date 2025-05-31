@@ -1,0 +1,19 @@
+version: '3.7'
+
+services:
+  car:
+    image: ghcr.io/otischung/pros_ai_image:latest
+    env_file:
+      - .env
+    volumes:
+      - ./src:/workspaces/src:ro
+      - ./car_control_for_docker_compose.sh:/workspaces/car_control_for_docker_compose.sh
+    networks:
+      - my_bridge_network
+    ports:
+      - "9090:9090"
+    command: ./car_control_for_docker_compose.sh
+
+networks:
+  my_bridge_network:
+    driver: bridge

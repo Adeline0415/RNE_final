@@ -1,0 +1,32 @@
+ekf_filter_node:
+    ros__parameters:
+        frequency: 30.0
+        sensor_timeout: 0.1
+        two_d_mode: true
+        transform_time_offset: 0.0
+        transform_timeout: 0.0
+        print_diagnostics: true
+        debug: false
+        publish_acceleration: false
+        publish_tf: true
+        map_frame: map
+        odom_frame: odom
+        base_link_frame: base_link
+        world_frame: odom
+
+        # IMU Data Configuration
+        imu0: /imu/data_raw
+        imu0_config: [false, false, false,  # x, y, z positions not used
+                      true,  true,  true,   # roll, pitch, yaw
+                      false, false, false,  # x, y, z velocities not used
+                      false,  false,  false,   # roll, pitch, yaw velocities
+                      true,  true,  true]   # x, y, z accelerations
+        imu0_differential: false
+        imu0_relative: true
+        imu0_queue_size: 5
+        imu0_pose_rejection_threshold: 0.8
+        imu0_twist_rejection_threshold: 0.8
+        imu0_linear_acceleration_rejection_threshold: 0.8
+        imu0_remove_gravitational_acceleration: true
+
+        # 將其他數據來源移除

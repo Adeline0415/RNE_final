@@ -1,0 +1,17 @@
+services:
+  map:
+    image: ghcr.io/screamlab/pros_jetson_driver_image:0.1.0
+    env_file:
+      - .env
+    volumes:
+      - ./demo/map/map01:/map
+    networks:
+      - my_bridge_network
+    command: "ros2 run nav2_map_server map_saver_cli -f /map/map01"
+
+# This will create a docker bridge network
+# docker network create --driver bridge pros_app_my_bridge_network
+# You can see the network by docker network ls
+networks:
+  my_bridge_network:
+    driver: bridge

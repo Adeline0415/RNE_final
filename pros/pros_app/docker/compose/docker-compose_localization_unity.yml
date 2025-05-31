@@ -1,0 +1,37 @@
+services:
+  lidar_tranform:
+    image: ghcr.io/screamlab/pros_unity_lidar_trans_image:latest
+    env_file:
+      - .env
+    networks:
+      - my_bridge_network
+    command: "ros2 run unity_lidar_transformer lidar_transformer_node"
+
+  localization:
+    image: ghcr.io/screamlab/pros_jetson_driver_image:0.1.0
+    env_file:
+      - .env
+    volumes:
+      - ./demo:/workspace/demo:ro
+    networks:
+      - my_bridge_network
+    depends_on:
+      - lidar_tranform
+    command: "ros2 launch /workspace/demo/localization_unity.xml"
+
+  rosbridge:
+    image: ghcr.io/screamlab/pros_base_image:0.0.2
+    env_file:
+      - .env
+    networks:
+      - my_bridge_network
+    ports:
+      - 9090:9090
+    command: " ros2 launch rosbridge_server rosbridge_websocket_launch.xml"
+
+# This will create a docker bridge network
+# docker network create --driver bridge pros_app_my_bridge_network
+# You can see the network by docker network ls
+networks:
+  my_bridge_network:
+    driver: bridge

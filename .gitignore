@@ -1,0 +1,10 @@
+*.0
+*.so
+*.pxd
+*.pyc
+*.csh
+*.fish
+*.ps1
+*.pyi
+*.ttf
+*.Identifier

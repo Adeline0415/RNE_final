@@ -1,0 +1,19 @@
+<launch>
+    <!--
+        蒐集 unity內lidar 所發布的scan資料
+        發布TF from base_footprint to laser
+        使用ros2_laser_scan_matcher 發布TF from odom to base_footprint
+    -->
+    <!-- 第四個數值輸入3.14是反轉整張地圖 -->
+
+    <node pkg="tf2_ros" exec="static_transform_publisher" name="base_to_laser_tf"
+          args="0.0 0.0 0.15 3.14 0.0 0.0 base_footprint laser"/>
+    <!--  x   y   z    yaw pitch roll  -->
+    <node name="scan_matcher" pkg="ros2_laser_scan_matcher" exec="laser_scan_matcher" output="screen">
+        <param name="base_frame" value="base_footprint"/>
+        <param name="publish_tf" value="true"/>
+        <param name="publish_odom" value="odom"/>
+
+    </node>
+
+</launch>

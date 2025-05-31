@@ -1,0 +1,7 @@
+yolo:
+  conf: 0.6
+  obb_model: "Adeline_object_detection_best.pt"
+  seg_model: "Adeline_semantic_segmentation_best.pt"
+
+image:
+  use_compressed: true

@@ -1,0 +1,30 @@
+services:
+  gps:
+    image: ghcr.io/screamlab/pros_gps:latest
+    env_file:
+      - .env
+    devices:
+      - "/dev/usb_gps:/dev/usb_gps"
+    networks:
+      - my_bridge_network
+    command: "ros2 run pros_gps gps_publish"
+
+  rosbridge:
+    image: ghcr.io/screamlab/pros_base_image:0.0.2
+    env_file:
+      - .env
+    networks:
+      - my_bridge_network
+    ports:
+      - 9090:9090
+    command: "ros2 launch rosbridge_server rosbridge_websocket_launch.xml"
+
+# This will create a docker bridge network
+# docker network create --driver bridge pros_app_my_bridge_network
+# You can see the network by docker network ls
+networks:
+  my_bridge_network:
+    driver: bridge
+
+# If GPS is not working, refer to the usage instructions at:
+# https://github.com/screamlab/pros_gps
