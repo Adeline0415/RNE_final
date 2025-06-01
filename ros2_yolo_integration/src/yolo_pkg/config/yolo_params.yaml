@@ -2,6 +2,31 @@ yolo:
   conf: 0.6
   obb_model: "Adeline_object_detection_best.pt"
   seg_model: "Adeline_semantic_segmentation_best.pt"
+  # 目標類別配置
+  target_classes:
+    # 皮卡丘 (唯一目標)
+    target: ["pikachu"]
+    # 家具類別
+    furniture: ["furniture"]
+    # 干擾物體 (包含假皮卡丘)
+    distractors: ["yoda", "beer", "gundam", "kirito_pikachu", "gengar_pikachu", "fluorescent_pikachu"]
+
+
+# 語義分割配置  
+segmentation:
+  enable: true
+  target_classes: ["ground", "wall", "furniture", "pikachu", "yoda", "kirito_pikachu", 
+                   "gengar_pikachu", "beer", "fluorescent_pikachu", "gundam", "mural"]
 
 image:
   use_compressed: true
+  screenshot_fps: 5
+
+# Hell模式導航參數
+navigation:
+  hell_mode:
+    search_timeout: 300  # 5分鐘
+    approach_distance: 0.5  # 50cm
+    obstacle_threshold: 0.8  # 80cm
+    rotation_speed_slow: 3.0
+    forward_speed_slow: 5.0d: true

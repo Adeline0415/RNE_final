@@ -1,0 +1,40 @@
+# 系統參數配置文件
+
+# 移動系統參數
+robot:
+  wheel_diameter: 0.08    # 輪直徑 (m)
+  wheelbase_width: 0.23   # 左右輪距 (m) 
+  wheelbase_length: 0.3   # 前後輪距 (m)
+
+# RGB相機參數
+camera:
+  image_width: 640
+  image_height: 480
+  
+  # 內參矩陣 (3x3)
+  intrinsic_matrix:
+    fx: 576.83946
+    fy: 577.82786  
+    cx: 319.59192
+    cy: 238.89255
+    
+  # 畸變參數
+  distortion_model: "plumb_bob"
+  distortion_coefficients: [0.001750, -0.003776, -0.000528, -0.000228, 0.000000]
+
+# 導航參數
+navigation:
+  # 基於車輛尺寸的導航參數
+  min_turning_radius: 0.15   # 最小轉彎半徑 (基於輪距)
+  safe_distance: 0.5         # 安全距離
+  approach_distance: 0.3     # 接近距離 (基於車輛長度)
+  
+  # 速度參數 (基於輪徑)
+  max_linear_speed: 0.2      # 最大線速度 (m/s)
+  max_angular_speed: 1.0     # 最大角速度 (rad/s)
+
+# 皮卡丘檢測參數
+pikachu_detection:
+  target_size_threshold: 1000  # 目標最小像素面積
+  confidence_threshold: 0.5
+  approach_pixel_threshold: 50000  # 接近時的像素面積閾值
