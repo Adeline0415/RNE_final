@@ -22,6 +22,7 @@ class PikachuNavHell(Node):
         # === 狀態管理 ===
         self.state = SimpleState.INIT
         self.state_start_time = None
+        self.scan_phase = 0  # 掃描階段
         self.clock = Clock()
         
         # === 皮卡丘檢測 ===
@@ -35,7 +36,7 @@ class PikachuNavHell(Node):
         
         # === 移動到中央 ===
         self.move_start_time = None
-        self.move_duration = 3.0  # 往前移動3秒到房間中央
+        self.move_duration = 4.5  # 往前移動5秒到房間中央
         
         # === 設置訂閱者和發布者 ===
         self.setup_subscribers()
@@ -114,28 +115,52 @@ class PikachuNavHell(Node):
 
     # === 主要邏輯 ===
     def scan_for_pikachu(self):
-        """原地掃描皮卡丘"""
+        """掃描皮卡丘 - 左轉100度→右轉50度→前進到中央→轉圈"""
         if self.scan_start_time is None:
             self.scan_start_time = self.clock.now()
-            self.get_logger().info(f"🔍 開始第{self.scan_count + 1}次掃描...")
+            self.scan_phase = 0  # 0:左轉100度, 1:右轉50度, 2:前進到中央, 3:中央轉圈
+            self.get_logger().info("🔍 開始掃描序列...")
         
         elapsed = (self.clock.now() - self.scan_start_time).nanoseconds / 1e9
+        rotate_100 = 6
+        rotate_50 = 3
         
-        if elapsed < self.scan_duration:
-            # 逆時鐘旋轉掃描
-            self.publish_car_control("COUNTERCLOCKWISE_ROTATION")
-        else:
-            # 掃描完成
-            self.scan_count += 1
-            self.scan_start_time = None
-            
-            if self.scan_count == 1:
-                # 第一次掃描完成，移動到房間中央
-                self.get_logger().info("🏃 第一次掃描完成，移動到房間中央...")
-                self.change_state(SimpleState.MOVING_TO_CENTER)
+        if self.scan_phase == 0:
+            # 階段0: 左轉100度 (預估需要約6-7秒)
+            if elapsed < rotate_100:
+                self.publish_car_control("COUNTERCLOCKWISE_ROTATION")
+                if elapsed < 1:
+                    self.get_logger().info("🔄 階段1: 左轉100度掃描中...")
             else:
-                # 第二次掃描也沒找到，停止任務
-                self.get_logger().info("😞 兩次掃描都未找到皮卡丘，任務結束")
+                self.scan_phase = 1
+                self.scan_start_time = self.clock.now()  # 重置計時器
+                self.get_logger().info("🔄 階段2: 右轉50度回到左斜前...")
+        
+        elif self.scan_phase == 1:
+            # 階段1: 右轉50度回到左斜前 (預估需要約3秒)
+            if elapsed < rotate_50:
+                self.publish_car_control("CLOCKWISE_ROTATION")
+            else:
+                self.scan_phase = 2
+                self.scan_start_time = self.clock.now()  # 重置計時器
+                self.get_logger().info("🏃 階段3: 直線前進到房間中央...")
+        
+        elif self.scan_phase == 2:
+            # 階段2: 直線前進到房間中央
+            if elapsed < self.move_duration:  # 使用原本的 move_duration (3秒)
+                self.publish_car_control("FORWARD")
+            else:
+                self.scan_phase = 3
+                self.scan_start_time = self.clock.now()  # 重置計時器
+                self.get_logger().info("🔍 階段4: 在中央位置轉圈掃描...")
+        
+        elif self.scan_phase == 3:
+            # 階段3: 在中央轉一圈
+            if elapsed < self.scan_duration:  # 使用原本的 scan_duration (8秒)
+                self.publish_car_control("COUNTERCLOCKWISE_ROTATION")
+            else:
+                # 所有階段完成，任務結束
+                self.get_logger().info("😞 完整掃描序列結束，未找到皮卡丘，任務結束")
                 self.publish_car_control("STOP")
 
     def move_to_center(self):
@@ -201,13 +226,7 @@ class PikachuNavHell(Node):
                 self.move_to_center()
                 
         elif self.state == SimpleState.APPROACHING:
-            if self.pikachu_detected:
-                self.approach_pikachu()
-            else:
-                # 丟失目標，回到掃描
-                self.get_logger().info("⚠️  丟失皮卡丘，回到掃描模式")
-                self.scan_start_time = None
-                self.change_state(SimpleState.SCANNING)
+            self.approach_pikachu()
                 
         elif self.state == SimpleState.SUCCESS:
             self.publish_car_control("STOP")
