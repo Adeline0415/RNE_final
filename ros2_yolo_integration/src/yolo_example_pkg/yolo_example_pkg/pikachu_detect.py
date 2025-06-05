@@ -47,7 +47,7 @@ class YoloDetectionNode(Node):
         self.allowed_labels = {"pikachu"}
 
         # 設定 YOLO 可信度閾值
-        self.conf_threshold = 0.5  # 可以修改這個值來調整可信度
+        self.conf_threshold = 0.525  # 可以修改這個值來調整可信度
 
         # 相機畫面中央高度上切成 n 個等距水平點。
         self.x_num_splits = 20
@@ -119,6 +119,7 @@ class YoloDetectionNode(Node):
         # 一開始預設沒找到目標
         found_target = 0
         delta_x = 0.0
+        total_pikachu_area = 0.0
         image, points = self.draw_cross(image)
         for result in results:
             for box in result.boxes:
@@ -131,6 +132,12 @@ class YoloDetectionNode(Node):
                 if self.allowed_labels and class_name not in self.allowed_labels:
                     continue
 
+                box_width = x2 - x1
+                box_height = y2 - y1
+                box_area = box_width * box_height
+                # 如果是皮卡丘，累加面積
+                if class_name in self.allowed_labels:
+                    total_pikachu_area += box_area
                 # 計算 Bounding Box 正中心點
                 cx, cy = (x1 + x2) // 2, (y1 + y2) // 2
 
@@ -155,7 +162,7 @@ class YoloDetectionNode(Node):
                     (0, 255, 0),
                     2,
                 )
-        self.publish_target_info(found_target, delta_x)
+        self.publish_target_info(found_target, delta_x, total_pikachu_area)
         return image
 
     def publish_image(self, image):
@@ -166,10 +173,10 @@ class YoloDetectionNode(Node):
         except Exception as e:
             self.get_logger().error(f"Could not publish image: {e}")
 
-    def publish_target_info(self, found, delta_x):
+    def publish_target_info(self, found, delta_x, total_area):
         """發佈目標資訊 (找到目標, 距離)"""
         msg = Float32MultiArray()
-        msg.data = [float(found), float(delta_x)]
+        msg.data = [float(found), float(delta_x), float(total_area)]
         self.target_pub.publish(msg)
 
 def main(args=None):
