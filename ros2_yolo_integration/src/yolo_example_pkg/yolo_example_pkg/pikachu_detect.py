@@ -47,7 +47,7 @@ class YoloDetectionNode(Node):
         self.allowed_labels = {"pikachu"}
 
         # 設定 YOLO 可信度閾值
-        self.conf_threshold = 0.6  # 可以修改這個值來調整可信度
+        self.conf_threshold = 0.5  # 可以修改這個值來調整可信度
 
         # 相機畫面中央高度上切成 n 個等距水平點。
         self.x_num_splits = 20
@@ -138,7 +138,9 @@ class YoloDetectionNode(Node):
                 found_target = 1
 
                 # ------ 計算與影像中心的偏移量 ------
-                delta_x = cx - points[4][0]
+                height, width = image.shape[:2]
+                image_center_x = width // 2
+                delta_x = cx - image_center_x  # 左邊為負數，右邊為正數
 
                 # 繪製框和標籤
                 cv2.rectangle(image, (x1, y1), (x2, y2), (0, 255, 0), 2)
