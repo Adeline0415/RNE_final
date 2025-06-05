@@ -4,108 +4,67 @@ from rclpy.node import Node
 from rclpy.clock import Clock
 from std_msgs.msg import String, Float32MultiArray, Bool
 from geometry_msgs.msg import PointStamped
-from sensor_msgs.msg import CompressedImage
-from cv_bridge import CvBridge
 from pros_car_py.ros_communicator_config import ACTION_MAPPINGS
 from pros_car_py.car_models import DeviceDataTypeEnum
 from enum import Enum, auto
-import cv2
-import numpy as np
 import json
 import time
 
-class FSM(Enum):
-    INIT = auto()             # 初始化
-    ROOM_DETECTION = auto()   # 房間檢測
-    FURNITURE_MAPPING = auto() # 家具地圖構建
-    SYSTEMATIC_SEARCH = auto() # 系統性搜索
-    PIKACHU_APPROACH = auto() # 接近皮卡丘
-    SUCCESS = auto()          # 成功
-    EMERGENCY_SEARCH = auto() # 緊急搜索
-    FAILED = auto()           # 失敗
+class SimpleState(Enum):
+    INIT = auto()              # 初始化
+    SCANNING = auto()          # 原地掃描
+    APPROACHING = auto()       # 接近皮卡丘
+    AVOIDING_OBSTACLE = auto() # 避障
+    SUCCESS = auto()           # 成功
+    FAILED = auto()            # 失敗
 
 class PikachuNavHell(Node):
     def __init__(self):
-        super().__init__('pikachu_seeker_hell')
-        self.bridge = CvBridge()
+        super().__init__('pikachu_nav_hell')
         
-        # === FSM狀態管理 ===
-        self.state = FSM.INIT
-        self.prev_state = None
+        # === 狀態管理 ===
+        self.state = SimpleState.INIT
         self.state_start_time = None
-        
-        # === 時間管理 ===
         self.clock = Clock()
-        self.mission_start_time = self.clock.now()
-        self.total_timeout = 300.0  # 5分鐘總超時
         
         # === 皮卡丘檢測 ===
         self.pikachu_detected = False
-        self.pikachu_position = None
-        self.pikachu_last_seen = None
-        self.pikachu_confidence = 0.0
+        self.pikachu_position = None  # [forward, left, up] 格式
+        self.detection_status = False
         
-        # === 家具檢測與地圖 ===
-        self.furniture_map = {}  # {家具類型: [位置列表]}
-        self.visited_areas = []  # 已訪問區域
-        self.current_scan_direction = 1  # 1: 右, -1: 左
-        
-        # === 房間檢測 ===
-        self.room_type = "unknown"
-        self.room_confirmed = False
-        self.room_detection_samples = []
-        
-        # === 搜索策略 ===
-        self.search_pattern = "spiral"  # spiral, grid, random
-        self.search_phase = 0
-        self.phase_duration = 15.0  # 每個搜索階段15秒
-        
-        # === 移動控制 ===
-        self.current_action = "STOP"
-        self.action_start_time = None
-        self.min_action_duration = 0.5  # 最小動作持續時間
-        
-        # === 障礙物檢測 ===
+        # === 避障邏輯 ===
         self.obstacle_detected = False
-        self.last_safe_direction = "FORWARD"
+        self.avoid_step = 0  # 避障步驟: 0=右轉90度, 1=前進, 2=左轉90度
         
-        # === ROS訂閱者 ===
+        # === 掃描計時 ===
+        self.scan_start_time = None
+        self.scan_duration = 8.0  # 原地轉一圈預估8秒
+        
+        # === 設置訂閱者 ===
         self.setup_subscribers()
         
-        # === ROS發布者 ===
+        # === 設置發布者 ===
         self.setup_publishers()
         
         # === 初始化 ===
         self.initialize_mission()
         
-        # 創建主循環定時器
+        # 主循環定時器
         self.timer = self.create_timer(0.1, self.main_loop)  # 10Hz
         
-        self.get_logger().info("🔥 皮卡丘Hell模式搜索已啟動 - 純RGB導航")
+        self.get_logger().info("🚀 皮卡丘Hell模式搜索器啟動")
 
     def setup_subscribers(self):
         """設置訂閱者"""
-        # YOLO檢測結果
-        self.yolo_status_sub = self.create_subscription(
-            Bool, '/yolo/detection/status', self.yolo_status_callback, 10)
-        
-        self.yolo_position_sub = self.create_subscription(
-            PointStamped, '/yolo/detection/position', self.yolo_position_callback, 10)
-        
-        # 多目標檢測結果 (如果你的YOLO能檢測多種物體)
+        # YOLO物體偏移資訊 (主要數據來源)
         self.object_offset_sub = self.create_subscription(
             String, '/yolo/object/offset', self.object_offset_callback, 10)
         
-        # RGB圖像
-        self.rgb_image_sub = self.create_subscription(
-            CompressedImage, '/camera/image/compressed', self.rgb_image_callback, 10)
+        # YOLO檢測狀態
+        self.detection_status_sub = self.create_subscription(
+            Bool, '/yolo/detection/status', self.detection_status_callback, 10)
         
-        # 車輛狀態 (如果有)
-        self.pose_sub = self.create_subscription(
-            Float32MultiArray, 'digital_twin/pose_status_array', 
-            self.pose_status_callback, 10)
-        
-        # 深度信息 (用於障礙物檢測)
+        # 深度信息用於避障
         self.depth_info_sub = self.create_subscription(
             Float32MultiArray, '/camera/x_multi_depth_values',
             self.depth_info_callback, 10)
@@ -121,52 +80,41 @@ class PikachuNavHell(Node):
         # YOLO目標設置
         self.target_label_pub = self.create_publisher(
             String, '/target_label', 10)
-        
-        # 任務狀態
-        self.status_pub = self.create_publisher(
-            String, '/pikachu_hell_status', 10)
-        
-        # 調試信息
-        self.debug_pub = self.create_publisher(
-            String, '/pikachu_hell_debug', 10)
 
     def initialize_mission(self):
         """初始化任務"""
-        self.change_state(FSM.INIT)
+        self.change_state(SimpleState.INIT)
         
-        # 設置YOLO檢測多個目標
-        self.set_detection_targets(["pikachu", "sofa", "table", "tv", "chair"])
+        # 設置YOLO檢測皮卡丘
+        self.set_detection_target("pikachu")
         
-        self.publish_status("INITIALIZED", "Hell模式初始化完成")
-        self.get_logger().info("🎯 設置多目標檢測: 皮卡丘 + 家具")
+        self.get_logger().info("🎯 設置檢測目標: 皮卡丘")
 
-    def set_detection_targets(self, targets):
+    def set_detection_target(self, target):
         """設置YOLO檢測目標"""
-        for target in targets:
-            target_msg = String()
-            target_msg.data = target
+        target_msg = String()
+        target_msg.data = target
+        
+        # 多次發布確保YOLO收到
+        for i in range(3):
             self.target_label_pub.publish(target_msg)
-            time.sleep(0.1)  # 短暫延遲確保消息發送
+            time.sleep(0.1)
+        
+        self.get_logger().info(f"📡 設置檢測目標: {target} (已發布3次確保收到)")
 
     def change_state(self, new_state):
-        """改變FSM狀態"""
-        self.prev_state = self.state
+        """改變狀態"""
+        old_state = self.state.name if hasattr(self, 'state') else "None"
         self.state = new_state
         self.state_start_time = self.clock.now()
-        self.get_logger().info(f"🔄 狀態切換: {self.prev_state.name} → {new_state.name}")
+        self.get_logger().info(f"🔄 狀態切換: {old_state} → {new_state.name}")
 
     def publish_car_control(self, action_key):
         """發布車輛控制指令"""
-        if action_key == self.current_action:
-            return  # 避免重複發送相同指令
-            
         if action_key not in ACTION_MAPPINGS:
             self.get_logger().warn(f"未知動作: {action_key}")
             return
             
-        self.current_action = action_key
-        self.action_start_time = self.clock.now()
-        
         velocities = ACTION_MAPPINGS[action_key]
         vel1, vel2, vel3, vel4 = velocities
         
@@ -179,65 +127,76 @@ class PikachuNavHell(Node):
         front_msg = Float32MultiArray()
         front_msg.data = [vel3, vel4]
         self.front_wheel_pub.publish(front_msg)
-
-    def publish_status(self, status, message=""):
-        """發布任務狀態"""
-        elapsed = (self.clock.now() - self.mission_start_time).nanoseconds / 1e9
-        status_data = {
-            "status": status,
-            "state": self.state.name,
-            "message": message,
-            "elapsed_time": elapsed,
-            "pikachu_detected": self.pikachu_detected,
-            "furniture_count": len(self.furniture_map),
-            "visited_areas": len(self.visited_areas)
-        }
         
-        status_msg = String()
-        status_msg.data = json.dumps(status_data)
-        self.status_pub.publish(status_msg)
-
-    def publish_debug(self, debug_info):
-        """發布調試信息"""
-        debug_msg = String()
-        debug_msg.data = json.dumps(debug_info)
-        self.debug_pub.publish(debug_msg)
+        # 改成info級別，確保能看到車輛控制指令
+        self.get_logger().info(f"🚗 執行動作: {action_key}, 速度: [{vel1}, {vel2}, {vel3}, {vel4}]")
+        
+        # 檢查發布者是否正常
+        rear_sub_count = self.rear_wheel_pub.get_subscription_count()
+        front_sub_count = self.front_wheel_pub.get_subscription_count()
+        self.get_logger().info(f"📡 後輪訂閱者: {rear_sub_count}, 前輪訂閱者: {front_sub_count}")
 
     # === 回調函數 ===
-    def yolo_status_callback(self, msg):
-        """YOLO檢測狀態回調"""
-        self.pikachu_detected = msg.data
-        if self.pikachu_detected:
-            self.pikachu_last_seen = self.clock.now()
-
-    def yolo_position_callback(self, msg):
-        """YOLO位置回調"""
-        self.pikachu_position = msg
-
     def object_offset_callback(self, msg):
-        """多物體檢測回調"""
+        """YOLO物體偏移回調 - 主要數據來源"""
+        self.get_logger().info("📥 收到YOLO offset數據！")  # 確認有收到回調
+        
         try:
+            # 檢查是否有數據
+            if not msg.data or msg.data.strip() == "":
+                self.get_logger().info("📡 收到空的offset數據")
+                return
+            
+            # 檢查是否是空陣列
+            if msg.data.strip() == "[]":
+                self.pikachu_detected = False
+                self.pikachu_position = None
+                self.get_logger().info("📡 YOLO未檢測到任何物體")
+                return
+            
             objects = json.loads(msg.data)
-            self.update_furniture_map(objects)
-        except json.JSONDecodeError:
-            pass
+            
+            # 重置檢測狀態
+            self.pikachu_detected = False
+            self.pikachu_position = None
+            
+            # 打印所有檢測到的物體（調試用）
+            if objects:
+                labels = [obj.get('label', 'unknown') for obj in objects]
+                self.get_logger().info(f"🔍 檢測到物體: {labels}")
+            
+            # 尋找皮卡丘 (不區分大小寫，多種可能的名稱)
+            pikachu_names = ['pikachu']
+            for obj in objects:
+                obj_label = obj.get('label', '')
+                
+                if any(name in obj_label for name in pikachu_names):
+                    self.pikachu_detected = True
+                    
+                    # 獲取FLU座標系位置 [forward, left, up]
+                    offset_flu = obj.get('offset_flu', [0, 0, 0])
+                    self.pikachu_position = offset_flu
+                    
+                    self.get_logger().info(
+                        f"🎯 檢測到皮卡丘！標籤: '{obj_label}', 位置: F={offset_flu[0]:.2f}, L={offset_flu[1]:.2f}, U={offset_flu[2]:.2f}")
+                    break
+                    
+            if not self.pikachu_detected:
+                self.get_logger().info("👀 本次掃描未檢測到皮卡丘，繼續搜索...")
+                
+        except json.JSONDecodeError as e:
+            self.get_logger().info(f"⚠️  JSON解析問題: {e}")
+            self.get_logger().info(f"📄 原始數據: {msg.data}")
+        except Exception as e:
+            self.get_logger().info(f"⚠️  數據處理問題: {e}")
+            self.get_logger().info(f"📄 原始數據: {msg.data}")
 
-    def rgb_image_callback(self, msg):
-        """RGB圖像回調"""
-        if not self.room_confirmed:
-            self.detect_room_from_image(msg)
-
-    def pose_status_callback(self, msg):
-        """位置狀態回調"""
-        if len(msg.data) >= 5:
-            self.x = msg.data[0]
-            self.y = msg.data[1]
-            self.yaw = msg.data[2]
-            # self.road_ahead = bool(msg.data[3])
-            self.obstacle_detected = bool(msg.data[4])
+    def detection_status_callback(self, msg):
+        """YOLO檢測狀態回調"""
+        self.detection_status = msg.data
 
     def depth_info_callback(self, msg):
-        """深度信息回調 - 用於障礙物檢測"""
+        """深度信息回調 - 用於避障"""
         if len(msg.data) >= 20:
             # 分析前方區域的深度
             forward_depths = msg.data[7:13]  # 前方區域
@@ -245,302 +204,143 @@ class PikachuNavHell(Node):
             
             if valid_depths:
                 min_distance = min(valid_depths)
-                if min_distance < 0.8:  # 80cm內有障礙物
-                    self.obstacle_detected = True
-                else:
-                    self.obstacle_detected = False
+                self.obstacle_detected = min_distance < 0.6  # 60cm內有障礙物
+            else:
+                self.obstacle_detected = False
 
-    # === 房間和家具檢測 ===
-    def detect_room_from_image(self, image_msg):
-        """從RGB圖像檢測房間類型"""
-        try:
-            cv_image = self.bridge.compressed_imgmsg_to_cv2(image_msg, "bgr8")
-            room_features = self.analyze_room_features(cv_image)
-            
-            self.room_detection_samples.append(room_features)
-            
-            if len(self.room_detection_samples) >= 10:
-                # 分析多個樣本確定房間類型
-                living_room_votes = sum(1 for r in self.room_detection_samples if r == "living_room")
-                
-                if living_room_votes >= 7:
-                    self.room_type = "living_room"
-                    self.room_confirmed = True
-                    self.get_logger().info("🏠 確認房間類型: Living Room")
-                    self.change_state(FSM.FURNITURE_MAPPING)
-                    
-        except Exception as e:
-            self.get_logger().error(f"房間檢測錯誤: {e}")
-
-    def analyze_room_features(self, image):
-        """分析房間特徵"""
-        # 轉換到HSV色彩空間
-        hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+    # === 主要邏輯 ===
+    def scan_for_pikachu(self):
+        """原地掃描皮卡丘"""
+        if self.scan_start_time is None:
+            self.scan_start_time = self.clock.now()
+            self.get_logger().info("🔍 開始原地掃描...")
         
-        # Living Room特徵檢測
-        # 1. 木色/棕色檢測 (家具)
-        brown_lower = np.array([10, 50, 50])
-        brown_upper = np.array([25, 255, 200])
-        brown_mask = cv2.inRange(hsv, brown_lower, brown_upper)
-        brown_ratio = np.sum(brown_mask > 0) / (image.shape[0] * image.shape[1])
+        elapsed = (self.clock.now() - self.scan_start_time).nanoseconds / 1e9
         
-        # 2. 藍色檢測 (可能的地毯或裝飾)
-        blue_lower = np.array([100, 50, 50])
-        blue_upper = np.array([130, 255, 255])
-        blue_mask = cv2.inRange(hsv, blue_lower, blue_upper)
-        blue_ratio = np.sum(blue_mask > 0) / (image.shape[0] * image.shape[1])
+        self.get_logger().info(f"⏰ 掃描進度: {elapsed:.1f}/{self.scan_duration:.1f} 秒")
         
-        # 3. 邊緣檢測 (家具邊緣)
-        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        edges = cv2.Canny(gray, 50, 150)
-        edge_density = np.sum(edges > 0) / (image.shape[0] * image.shape[1])
-        
-        # Living Room判斷邏輯
-        if brown_ratio > 0.08 and edge_density > 0.05:
-            return "living_room"
+        if elapsed < self.scan_duration:
+            # 最慢速度逆時鐘旋轉
+            self.publish_car_control("COUNTERCLOCKWISE_ROTATION")
         else:
-            return "unknown"
+            # 掃描完一圈仍未找到，延長搜索時間或重新開始
+            self.get_logger().info("⚠️  第一輪掃描完成，未找到皮卡丘，重新開始掃描...")
+            self.scan_start_time = None  # 重置掃描時間，重新開始
+            # 不要直接進入失敗狀態，而是重新掃描
 
-    def update_furniture_map(self, detected_objects):
-        """更新家具地圖"""
-        for obj in detected_objects:
-            label = obj.get('label', 'unknown')
-            offset = obj.get('offset_flu', [0, 0, 0])
-            
-            if label != 'pikachu':  # 只記錄家具
-                if label not in self.furniture_map:
-                    self.furniture_map[label] = []
-                
-                # 添加位置信息
-                position = {
-                    'offset': offset,
-                    'timestamp': self.clock.now().nanoseconds / 1e9,
-                    'confidence': obj.get('confidence', 0.5)
-                }
-                self.furniture_map[label].append(position)
-                
-                # 限制每種家具最多記錄10個位置
-                if len(self.furniture_map[label]) > 10:
-                    self.furniture_map[label].pop(0)
-
-    # === 搜索策略 ===
-    def execute_systematic_search(self):
-        """執行系統性搜索"""
-        state_time = (self.clock.now() - self.state_start_time).nanoseconds / 1e9
-        
-        if self.search_pattern == "spiral":
-            self.execute_spiral_search(state_time)
-        elif self.search_pattern == "grid":
-            self.execute_grid_search(state_time)
-        else:
-            self.execute_adaptive_search(state_time)
-
-    def execute_spiral_search(self, state_time):
-        """螺旋搜索"""
-        phase_time = state_time % (self.phase_duration * 4)  # 4階段循環
-        
-        if phase_time < self.phase_duration:
-            # 階段1: 向前掃描
-            self.scan_and_move("FORWARD")
-        elif phase_time < self.phase_duration * 2:
-            # 階段2: 右轉掃描
-            self.scan_and_move("CLOCKWISE_ROTATION")
-        elif phase_time < self.phase_duration * 3:
-            # 階段3: 向前掃描
-            self.scan_and_move("FORWARD")
-        else:
-            # 階段4: 左轉掃描
-            self.scan_and_move("COUNTERCLOCKWISE_ROTATION")
-
-    def execute_grid_search(self, state_time):
-        """網格搜索"""
-        # 簡化的網格搜索：左右掃描 + 前進
-        cycle_time = state_time % 20.0  # 20秒一個周期
-        
-        if cycle_time < 6.0:
-            self.scan_and_move("COUNTERCLOCKWISE_ROTATION_SLOW")
-        elif cycle_time < 12.0:
-            self.scan_and_move("CLOCKWISE_ROTATION_SLOW")
-        elif cycle_time < 16.0:
-            self.scan_and_move("FORWARD")
-        else:
-            self.scan_and_move("CLOCKWISE_ROTATION")
-
-    def execute_adaptive_search(self, state_time):
-        """自適應搜索 - 基於家具地圖"""
-        if len(self.furniture_map) == 0:
-            # 沒有家具信息，執行基本掃描
-            self.execute_spiral_search(state_time)
-            return
-            
-        # 基於家具位置規劃搜索
-        # 皮卡丘可能在家具附近
-        if self.should_search_near_furniture():
-            self.search_near_furniture()
-        else:
-            self.execute_spiral_search(state_time)
-
-    def should_search_near_furniture(self):
-        """判斷是否應該在家具附近搜索"""
-        # 如果檢測到沙發、桌子等，皮卡丘可能在附近
-        priority_furniture = ['sofa', 'table', 'chair']
-        for furniture in priority_furniture:
-            if furniture in self.furniture_map and len(self.furniture_map[furniture]) > 0:
-                return True
-        return False
-
-    def search_near_furniture(self):
-        """在家具附近搜索"""
-        # 簡化實現：慢速轉向搜索
-        if self.current_scan_direction == 1:
-            self.publish_car_control("CLOCKWISE_ROTATION_SLOW")
-        else:
-            self.publish_car_control("COUNTERCLOCKWISE_ROTATION_SLOW")
-            
-        # 定期改變掃描方向
-        if self.action_start_time and \
-           (self.clock.now() - self.action_start_time).nanoseconds / 1e9 > 5.0:
-            self.current_scan_direction *= -1
-
-    def scan_and_move(self, primary_action):
-        """掃描並移動"""
-        if self.obstacle_detected:
-            # 遇到障礙物，嘗試避開
-            self.avoid_obstacle()
-        else:
-            # 正常執行動作
-            self.publish_car_control(primary_action)
-
-    def avoid_obstacle(self):
-        """避開障礙物"""
-        # 簡單的避障策略
-        avoid_actions = ["CLOCKWISE_ROTATION", "COUNTERCLOCKWISE_ROTATION", "BACKWARD"]
-        
-        # 選擇避障動作
-        if self.last_safe_direction in avoid_actions:
-            action = self.last_safe_direction
-        else:
-            action = "CLOCKWISE_ROTATION"
-            
-        self.publish_car_control(action)
-        self.last_safe_direction = action
-
-    # === 皮卡丘接近邏輯 ===
     def approach_pikachu(self):
         """接近皮卡丘"""
-        if not self.pikachu_position:
-            self.change_state(FSM.SYSTEMATIC_SEARCH)
-            return
-            
-        x = self.pikachu_position.point.x
-        y = self.pikachu_position.point.y
-        z = self.pikachu_position.point.z
-        
-        distance = np.sqrt(x*x + y*y + z*z)
-        
-        # 成功條件：距離小於50cm
-        if distance < 0.5:
-            self.change_state(FSM.SUCCESS)
+        if not self.pikachu_detected or not self.pikachu_position:
+            # 丟失目標，回到掃描
+            self.change_state(SimpleState.SCANNING)
             return
         
-        # 計算接近動作
-        if abs(y) > 0.4:  # 需要對準
-            if y > 0:
-                self.publish_car_control("COUNTERCLOCKWISE_ROTATION_SLOW")
+        forward_dist = self.pikachu_position[0]  # 前方距離
+        left_offset = self.pikachu_position[1]   # 左右偏移
+        
+        # 檢查是否到達目標
+        if forward_dist < 0.5:  # 50cm內算成功
+            self.change_state(SimpleState.SUCCESS)
+            return
+        
+        # 檢查是否有障礙物
+        if self.obstacle_detected:
+            self.change_state(SimpleState.AVOIDING_OBSTACLE)
+            return
+        
+        # 決定移動方向
+        if abs(left_offset) > 0.3:  # 需要對準
+            if left_offset > 0:  # 皮卡丘在左邊
+                self.publish_car_control("COUNTERCLOCKWISE_ROTATION")
+            else:  # 皮卡丘在右邊
+                self.publish_car_control("CLOCKWISE_ROTATIONW")
+        else:  # 已對準，直接前進
+            if forward_dist > 1.5:
+                self.publish_car_control("FORWARD")  # 距離遠，正常速度
             else:
-                self.publish_car_control("CLOCKWISE_ROTATION_SLOW")
-        elif x > 1.0:  # 距離較遠
-            if self.obstacle_detected:
-                self.avoid_obstacle()
+                self.publish_car_control("FORWARD_SLOW")  # 距離近，慢速
+
+    def avoid_obstacle(self):
+        """簡單避障邏輯：右轉90度→前進→左轉90度"""
+        state_time = (self.clock.now() - self.state_start_time).nanoseconds / 1e9
+        
+        if self.avoid_step == 0:  # 右轉90度
+            if state_time < 2.0:  # 轉2秒
+                self.publish_car_control("CLOCKWISE_ROTATION")
             else:
+                self.avoid_step = 1
+                self.state_start_time = self.clock.now()
+        
+        elif self.avoid_step == 1:  # 前進一點
+            if state_time < 1.5:  # 前進1.5秒
                 self.publish_car_control("FORWARD")
-        elif x > 0.5:  # 距離適中
-            self.publish_car_control("FORWARD_SLOW")
-        else:
-            self.publish_car_control("STOP")
+            else:
+                self.avoid_step = 2
+                self.state_start_time = self.clock.now()
+        
+        elif self.avoid_step == 2:  # 左轉90度
+            if state_time < 2.0:  # 轉2秒
+                self.publish_car_control("COUNTERCLOCKWISE_ROTATION")
+            else:
+                # 避障完成，重置並回到接近模式
+                self.avoid_step = 0
+                self.change_state(SimpleState.APPROACHING)
 
     # === 主循環 ===
     def main_loop(self):
-        """主FSM循環"""
-        current_time = self.clock.now()
-        total_elapsed = (current_time - self.mission_start_time).nanoseconds / 1e9
-        
-        # 全局超時檢查
-        if total_elapsed > self.total_timeout:
-            self.change_state(FSM.FAILED)
-            return
-        
-        # 執行當前狀態邏輯
-        if self.state == FSM.INIT:
-            # 初始化完成後進入房間檢測
-            self.change_state(FSM.ROOM_DETECTION)
+        """主循環"""
+        if self.state == SimpleState.INIT:
+            # 初始化完成，開始掃描
+            time.sleep(1)  # 等待1秒讓系統穩定
+            self.change_state(SimpleState.SCANNING)
             
-        elif self.state == FSM.ROOM_DETECTION:
-            if self.room_confirmed:
-                self.change_state(FSM.FURNITURE_MAPPING)
-            else:
-                # 緩慢前進進行房間檢測
-                self.publish_car_control("FORWARD_SLOW")
-                
-        elif self.state == FSM.FURNITURE_MAPPING:
-            # 快速掃描建立家具地圖
-            state_time = (current_time - self.state_start_time).nanoseconds / 1e9
-            
-            if state_time < 10.0:  # 前10秒建立家具地圖
-                if state_time < 5.0:
-                    self.publish_car_control("CLOCKWISE_ROTATION_SLOW")
-                else:
-                    self.publish_car_control("COUNTERCLOCKWISE_ROTATION_SLOW")
-            else:
-                self.change_state(FSM.SYSTEMATIC_SEARCH)
-                
-        elif self.state == FSM.SYSTEMATIC_SEARCH:
+        elif self.state == SimpleState.SCANNING:
             if self.pikachu_detected:
-                self.change_state(FSM.PIKACHU_APPROACH)
+                self.change_state(SimpleState.APPROACHING)
             else:
-                self.execute_systematic_search()
+                self.scan_for_pikachu()
                 
-                # 如果搜索時間過長，切換到緊急搜索
-                state_time = (current_time - self.state_start_time).nanoseconds / 1e9
-                if state_time > 120.0:  # 2分鐘後切換到緊急搜索
-                    self.change_state(FSM.EMERGENCY_SEARCH)
-                    
-        elif self.state == FSM.PIKACHU_APPROACH:
+        elif self.state == SimpleState.APPROACHING:
             if self.pikachu_detected:
                 self.approach_pikachu()
             else:
-                # 丟失目標，回到搜索
-                self.change_state(FSM.SYSTEMATIC_SEARCH)
+                # 丟失目標，回到掃描
+                self.scan_start_time = None  # 重置掃描時間
+                self.change_state(SimpleState.SCANNING)
                 
-        elif self.state == FSM.EMERGENCY_SEARCH:
-            # 緊急搜索：快速隨機移動
-            state_time = (current_time - self.state_start_time).nanoseconds / 1e9
-            if self.pikachu_detected:
-                self.change_state(FSM.PIKACHU_APPROACH)
-            elif state_time > 60.0:  # 緊急搜索1分鐘
-                self.change_state(FSM.FAILED)
-            else:
-                # 快速隨機搜索
-                cycle = int(state_time) % 4
-                actions = ["FORWARD", "CLOCKWISE_ROTATION", "BACKWARD", "COUNTERCLOCKWISE_ROTATION"]
-                self.publish_car_control(actions[cycle])
-                
-        elif self.state == FSM.SUCCESS:
-            self.publish_car_control("STOP")
-            self.publish_status("SUCCESS", f"🎉 成功找到皮卡丘！用時 {total_elapsed:.1f}秒")
+        elif self.state == SimpleState.AVOIDING_OBSTACLE:
+            self.avoid_obstacle()
             
-        elif self.state == FSM.FAILED:
+        elif self.state == SimpleState.SUCCESS:
             self.publish_car_control("STOP")
-            self.publish_status("FAILED", f"❌ 任務失敗，超時 {total_elapsed:.1f}秒")
+            self.get_logger().info("🎉 成功找到並接近皮卡丘！")
+            
+        elif self.state == SimpleState.FAILED:
+            self.publish_car_control("STOP")
+            self.get_logger().info("📝 任務狀態：未能在規定時間內找到皮卡丘")
+            self.get_logger().info("💡 建議檢查：1) YOLO節點是否運行 2) 皮卡丘是否在視野內 3) 模型是否包含皮卡丘類別")
         
-        # 定期發布狀態
-        if int(total_elapsed) % 10 == 0:  # 每10秒發布一次狀態
-            self.publish_status("RUNNING", f"狀態: {self.state.name}")
+        # 定期檢查YOLO連接狀態
+        current_time = self.clock.now()
+        if hasattr(self, '_last_check_time'):
+            time_since_check = (current_time - self._last_check_time).nanoseconds / 1e9
+        else:
+            time_since_check = 0
+            self._last_check_time = current_time
+        
+        if time_since_check > 5.0:  # 每5秒檢查一次
+            self._last_check_time = current_time
+            # 檢查訂閱者數量
+            offset_sub_count = len([node for node in self.get_topic_names_and_types() if '/yolo/object/offset' in node[0]])
+            self.get_logger().info(f"🔗 YOLO連接檢查 - offset話題存在: {'是' if offset_sub_count > 0 else '否'}")
+            
+            # 重新發送目標設置
+            self.set_detection_target("pikachu")
 
 def main(args=None):
     rclpy.init(args=args)
     
-    node = PikachuSeekerHell()
+    node = PikachuNavHell()
     
     try:
         rclpy.spin(node)

@@ -24,6 +24,7 @@ setup(
         "console_scripts": [
             "yolo_node = yolo_example_pkg.yolo_test:main",
             "darth_vader_detect_node = yolo_example_pkg.darth_vader_detect:main",
+            "pikachu_detect_node = yolo_example_pkg.pikachu_detect:main",
         ],
     },
 )
