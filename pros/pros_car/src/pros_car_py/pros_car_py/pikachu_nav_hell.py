@@ -62,13 +62,13 @@ class PikachuNavHell(Node):
         # === 避障模式 === 
         self.obstacle_start_time = None
         self.obstacle_phase = 0
-        self.obstacle_durations = [2.0, 1.5, 2.0]
+        self.obstacle_durations = [1.0, 2.0, 1.5, 2.0]
 
         # 皮卡丘面積變化檢測
         self.pikachu_area_history = []  # 存儲歷史面積數據
         self.area_check_interval = 2.0  # 1秒檢查一次
         self.last_area_check_time = None
-        self.area_change_threshold = 0.05  # 面積變化小於5%視為撞到
+        self.area_change_threshold = 0.04  # 面積變化小於5%視為撞到
             
         # === 最終接近階段 === 
         self.final_approach_start_time = None
@@ -384,20 +384,22 @@ class PikachuNavHell(Node):
         
         if elapsed < current_duration:
             if self.obstacle_phase == 0:
-                self.publish_car_control("CLOCKWISE_ROTATION")
+                self.publish_car_control("BACKWARD")
             elif self.obstacle_phase == 1:
-                self.publish_car_control("FORWARD")
+                self.publish_car_control("CLOCKWISE_ROTATION")
             elif self.obstacle_phase == 2:
+                self.publish_car_control("FORWARD")
+            elif self.obstacle_phase == 3:
                 self.publish_car_control("COUNTERCLOCKWISE_ROTATION")
         else:
-            if self.obstacle_phase < 2:
+            if self.obstacle_phase < 3:
                 self.obstacle_phase += 1
                 self.obstacle_start_time = self.clock.now()
             else:
                 self.get_logger().info("✅避障完成，返回掃描模式")
                 self.obstacle_start_time = None
                 self.obstacle_phase = 0
-                self.change_state(SimpleState.SCANNING)
+                self.change_state(SimpleState.APPROACHING)
 
     # === 主循環 ===
     def main_loop(self):
