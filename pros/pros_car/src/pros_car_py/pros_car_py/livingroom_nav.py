@@ -21,7 +21,7 @@ class SimpleState(Enum):
 
 class LivingRoomNav(Node):
     def __init__(self):
-        super().__init__('pikachu_nav_hell')
+        super().__init__('livingroom_nav_hell')
         
         # === 狀態管理 ===
         self.state = SimpleState.INIT
