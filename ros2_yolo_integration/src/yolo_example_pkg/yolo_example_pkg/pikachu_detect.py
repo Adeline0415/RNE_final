@@ -20,7 +20,7 @@ class YoloDetectionNode(Node):
 
         # 使用 yolo model 位置
         model_path = os.path.join(
-            get_package_share_directory("yolo_example_pkg"), "models", "Adeline_object_detection_best.pt"
+            get_package_share_directory("yolo_example_pkg"), "models", "Adeline_pikachu_best.pt"
         )
 
         device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -47,7 +47,7 @@ class YoloDetectionNode(Node):
         self.allowed_labels = {"pikachu"}
 
         # 設定 YOLO 可信度閾值
-        self.conf_threshold = 0.525  # 可以修改這個值來調整可信度
+        self.conf_threshold = 0.65  # 可以修改這個值來調整可信度
 
         # 相機畫面中央高度上切成 n 個等距水平點。
         self.x_num_splits = 20

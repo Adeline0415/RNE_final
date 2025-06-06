@@ -40,7 +40,7 @@ class PikachuNavHell(Node):
         
         # === 移動到中央 ===
         self.move_start_time = None
-        self.move_duration = 4.5  # 往前移動5秒到房間中央
+        self.move_duration = 4.0  # 往前移動5秒到房間中央
         
         # === 設置訂閱者和發布者 ===
         self.setup_subscribers()
@@ -55,24 +55,24 @@ class PikachuNavHell(Node):
         self.previous_rgb_image = None
         self.last_rgb_check_time = None
         self.rgb_check_interval = 1.0
-        self.image_similarity_threshold = 0.85
+        self.image_similarity_threshold = 0.98
         self.consecutive_similar_count = 0
-        self.max_consecutive_similar = 3  # 連續2次相似才判定為撞到
+        self.max_consecutive_similar = 3  # 連續3次相似才判定為撞到
         
         # === 避障模式 === 
         self.obstacle_start_time = None
         self.obstacle_phase = 0
-        self.obstacle_durations = [1.0, 2.0, 1.5, 2.0]
+        self.obstacle_durations = [0.5, 1.5, 1.5, 2.0]
 
         # 皮卡丘面積變化檢測
         self.pikachu_area_history = []  # 存儲歷史面積數據
-        self.area_check_interval = 2.0  # 1秒檢查一次
+        self.area_check_interval = 2.0  # 2秒檢查一次
         self.last_area_check_time = None
-        self.area_change_threshold = 0.04  # 面積變化小於5%視為撞到
+        self.area_change_threshold = 0.035  # 面積變化小於5%視為撞到
             
         # === 最終接近階段 === 
         self.final_approach_start_time = None
-        self.final_approach_duration = 1.5
+        self.final_approach_duration = 1.0
 
         self.current_action = "STOP"  # 初始狀態為停止
 
@@ -236,13 +236,11 @@ class PikachuNavHell(Node):
             else:
                 self.change_state(SimpleState.SUCCESS)
             return  
-        
-        # 檢查是否達到面積閾值（首次觸發）
-        if self.pikachu_total_area >= self.target_area_threshold:
+
+        if not self.pikachu_detected:
             self.final_approach_start_time = self.clock.now()
-            self.get_logger().info(f"皮卡丘面積達標({self.pikachu_total_area:.0f}px²)！開始最終接近...")
-            return  # 返回，下一輪循環會執行上面的邏輯
-        
+            return
+
         # 面積未達標，繼續對準和接近（原有邏輯）
         alignment_threshold = 50
         
