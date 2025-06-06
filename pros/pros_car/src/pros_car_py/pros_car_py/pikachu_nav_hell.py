@@ -159,70 +159,9 @@ class PikachuNavHell(Node):
 
     # === 主要邏輯 ===
     def scan_for_pikachu(self):
-        """掃描皮卡丘 - 左轉100度→右轉50度→前進到中央→轉圈"""
-        if self.scan_start_time is None:
-            self.scan_start_time = self.clock.now()
-            self.scan_phase = 0  # 0:左轉100度, 1:右轉50度, 2:前進到中央, 3:中央轉圈
-            self.get_logger().info("開始掃描序列...")
-        
-        elapsed = (self.clock.now() - self.scan_start_time).nanoseconds / 1e9
-        rotate_100 = 5.75
-        rotate_50 = 3.2
-        
-        if self.scan_phase == 0:
-            # 階段0: 左轉100度 (預估需要約6-7秒)
-            if elapsed < rotate_100:
-                self.publish_car_control("COUNTERCLOCKWISE_ROTATION")
-                if elapsed < 1:
-                    self.get_logger().info("階段1: 左轉100度掃描中...")
-            else:
-                self.scan_phase = 1
-                self.scan_start_time = self.clock.now()  # 重置計時器
-                self.get_logger().info("階段2: 右轉50度回到左斜前...")
-        
-        elif self.scan_phase == 1:
-            # 階段1: 右轉50度回到左斜前 (預估需要約3秒)
-            if elapsed < rotate_50:
-                self.publish_car_control("CLOCKWISE_ROTATION")
-            else:
-                self.scan_phase = 2
-                self.scan_start_time = self.clock.now()  # 重置計時器
-                self.get_logger().info("階段3: 直線前進到房間中央...")
-        
-        elif self.scan_phase == 2:
-            # 階段2: 直線前進到房間中央
-            self.last_rgb_check_time = self.clock.now()
-            if elapsed < self.move_duration:  # 使用原本的 move_duration (3秒)
-                self.publish_car_control("FORWARD")
-            else:
-                self.scan_phase = 3
-                self.scan_start_time = self.clock.now()  # 重置計時器
-                self.get_logger().info("階段4: 在中央位置轉圈掃描...")
-        
-        elif self.scan_phase == 3:
-            # 階段3: 在中央轉一圈
-            if elapsed < self.scan_duration:  # 使用原本的 scan_duration (8秒)
-                self.publish_car_control("COUNTERCLOCKWISE_ROTATION")
-            else:
-                # 所有階段完成，任務結束
-                self.get_logger().info("完整掃描序列結束，未找到皮卡丘，任務結束")
-                self.publish_car_control("STOP")
-
-    def move_to_center(self):
-        """移動到房間中央"""
-        if self.move_start_time is None:
-            self.move_start_time = self.clock.now()
-        
-        elapsed = (self.clock.now() - self.move_start_time).nanoseconds / 1e9
-        
-        if elapsed < self.move_duration:
-            # 直線前進
-            self.publish_car_control("FORWARD")
-        else:
-            # 移動完成，開始第二次掃描
-            self.get_logger().info("到達房間中央，開始第二次掃描...")
-            self.move_start_time = None
-            self.change_state(SimpleState.SCANNING)
+        """掃描皮卡丘"""
+        self.get_logger().info("開始掃描...")
+        self.publish_car_control("COUNTERCLOCKWISE_ROTATION")
 
     def approach_pikachu(self):
         """接近皮卡丘 - 當面積達到閾值時進入最終階段"""
@@ -304,15 +243,15 @@ class PikachuNavHell(Node):
                 
                 if similarity > self.image_similarity_threshold:
                     self.consecutive_similar_count += 1
-                    self.get_logger().info(f"⚠️ RGB相似度高: {similarity:.3f} (連續{self.consecutive_similar_count}次)")
+                    self.get_logger().info(f"RGB相似度高: {similarity:.3f} (連續{self.consecutive_similar_count}次)")
                     
                     if self.consecutive_similar_count >= self.max_consecutive_similar:
-                        self.get_logger().warn(f"🚧 RGB檢測到障礙物！連續{self.consecutive_similar_count}次相似")
+                        self.get_logger().warn(f"RGB檢測到障礙物！連續{self.consecutive_similar_count}次相似")
                         self.consecutive_similar_count = 0
                         return True
                 else:
                     self.consecutive_similar_count = 0
-                    self.get_logger().info(f"✅ RGB正常，相似度: {similarity:.3f}")
+                    self.get_logger().info(f"RGB正常，相似度: {similarity:.3f}")
             
             self.last_rgb_check_time = current_time
         
@@ -354,14 +293,14 @@ class PikachuNavHell(Node):
                     area_change_ratio = (current_area - previous_area) / previous_area
                     
                     self.get_logger().info(
-                        f"📐 面積變化: {previous_area:.0f} → {current_area:.0f} "
+                        f"面積變化: {previous_area:.0f} → {current_area:.0f} "
                         f"(變化率: {area_change_ratio:.3f})"
                     )
                     
                     # 如果面積變化太小（小於閾值），判定為撞到
                     if abs(area_change_ratio) < self.area_change_threshold:
                         self.get_logger().warn(
-                            f"🚧 皮卡丘面積停滯檢測到障礙物！"
+                            f"皮卡丘面積停滯檢測到障礙物！"
                             f"變化率僅 {area_change_ratio:.3f} < {self.area_change_threshold}"
                         )
                         return True
@@ -397,7 +336,7 @@ class PikachuNavHell(Node):
                 self.get_logger().info("✅避障完成，返回掃描模式")
                 self.obstacle_start_time = None
                 self.obstacle_phase = 0
-                self.change_state(SimpleState.APPROACHING)
+                self.change_state(SimpleState.SCANNING)
 
     # === 主循環 ===
     def main_loop(self):
