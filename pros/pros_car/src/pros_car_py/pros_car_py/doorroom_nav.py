@@ -11,6 +11,7 @@ import time
 import cv2
 import numpy as np
 from cv_bridge import CvBridge
+import math
 
 class DoorRoomState(Enum):
     INIT = auto()                 # 初始化
@@ -19,7 +20,6 @@ class DoorRoomState(Enum):
     MOVING_TO_LEFT_WALL = auto()  # 移動到最左邊牆壁
     TURNING_RIGHT_180 = auto()    # 轉向面對右邊開始掃描
     TURNING_LEFT_180 = auto()     # 轉向面對左邊開始掃描
-    SCANNING_FOR_DOOR = auto()    # 掃描門（水平線）
     PASSING_THROUGH_DOOR = auto() # 通過門
     MOVING_TO_RIGHT_DOOR = auto() # 移動到右邊下一個門的位置
     MOVING_TO_LEFT_DOOR = auto()  # 移動到最左邊還沒通過的門的位置
@@ -420,7 +420,7 @@ class DoorRoomNav(Node):
                 self.change_state(DoorRoomState.PASSING_THROUGH_DOOR)
                 return
             
-            if self.detect_horizontal_line() and (self.check_color_ratio("blue") > 0.15) and (self.check_color_ratio("blue") < 0.9) and (self.get_current_direction() == CarDirection.RIGHT):
+            if self.detect_horizontal_line() and (self.check_color_ratio("blue") < 0.9) and (self.get_current_direction() == CarDirection.RIGHT):
                 self.get_logger().info("180度轉向完成 檢測到牆壁水平線，往前移動到下一個門位置")
                 self.car_direction = CarDirection.RIGHT
                 self.move_start_time = None
@@ -482,7 +482,7 @@ class DoorRoomNav(Node):
             # 已經開始計時，檢查是否達到2秒
             elapsed = (self.clock.now() - self.move_start_time).nanoseconds / 1e9
             
-            if elapsed < 1.5:  # 看不到灰色後再走2秒
+            if elapsed < 1.0:  # 看不到灰色後再走2秒
                 self.publish_car_control("FORWARD")
             else:
                 # 完成通過門
@@ -560,11 +560,23 @@ class DoorRoomNav(Node):
         self.get_logger().info("掃描皮卡丘中...")
 
     def approach_pikachu(self):
-        """接近皮卡丘"""
+        """接近皮卡丘 - 當面積達到閾值時進入最終階段"""
+        # 如果已經在最終接近階段，直接執行不受檢測影響
+        if self.final_approach_start_time is not None:
+            elapsed = (self.clock.now() - self.final_approach_start_time).nanoseconds / 1e9
+            if elapsed < self.final_approach_duration:
+                self.publish_car_control("FORWARD")
+                remaining_time = self.final_approach_duration - elapsed
+                self.get_logger().info(f"最終接近中...剩餘{remaining_time:.1f}秒")
+            else:
+                self.change_state(DoorRoomState.SUCCESS)
+            return  
+
         if not self.pikachu_detected:
-            self.change_state(DoorRoomState.SCANNING_FOR_PIKACHU)
+            self.final_approach_start_time = self.clock.now()
             return
 
+        # 面積未達標，繼續對準和接近（原有邏輯）
         alignment_threshold = 50
         
         if abs(self.delta_x) > alignment_threshold:
@@ -574,11 +586,7 @@ class DoorRoomNav(Node):
                 self.publish_car_control("CLOCKWISE_ROTATION")
         else:
             self.publish_car_control("FORWARD")
-            self.get_logger().info(f"前進接近皮卡丘 (面積: {self.pikachu_total_area:.0f}px²)")
-            
-            # 檢查是否足夠接近（可以根據面積或其他條件判斷）
-            if self.pikachu_total_area > 50000:  # 面積閾值
-                self.change_state(DoorRoomState.SUCCESS)
+            self.get_logger().info(f"前進接近 (面積: {self.pikachu_total_area:.0f}px²)")
 
     def detect_horizontal_line(self):
         """檢測水平線"""
@@ -596,13 +604,28 @@ class DoorRoomNav(Node):
                 minLineLength=30,
                 maxLineGap=10
             )
-            
+        
             if lines is not None:
                 for line in lines:
                     x1, y1, x2, y2 = line[0]
-                    # 檢查是否為水平線（y座標差異很小）
-                    if abs(y1 - y2) <= 2:  # 允許5像素的誤差
-                        self.get_logger().info(f"檢測到水平線: ({x1},{y1}) -> ({x2},{y2})")
+                    
+                    # 計算線段長度
+                    length = ((x2-x1)**2 + (y2-y1)**2)**0.5
+                    
+                    # 只檢查夠長的線段
+                    if length < 50:  # 最小長度閾值
+                        continue
+                        
+                    # 計算斜率角度
+                    if x2 - x1 != 0:
+                        slope = (y2 - y1) / (x2 - x1)
+                        angle = abs(math.atan(slope) * 180 / math.pi)
+                    else:
+                        angle = 90  # 垂直線
+                    
+                    # 水平線角度應該接近0度
+                    if angle <= 0.5:  # 允許1度誤差
+                        self.get_logger().info(f"檢測到水平線: ({x1},{y1}) -> ({x2},{y2}), 角度: {angle:.1f}°")
                         return True
             
             return False
@@ -694,6 +717,9 @@ class DoorRoomNav(Node):
         if self.state == DoorRoomState.INIT:
             # 初始化完成，開始轉向左邊
             self.turn_left_90_degrees_first()
+
+        elif self.pikachu_detected:
+            self.change_state(DoorRoomState.APPROACHING_PIKACHU)
             
         elif self.state == DoorRoomState.TURNING_LEFT_90:
             self.turn_left_90_degrees()
@@ -706,9 +732,6 @@ class DoorRoomNav(Node):
 
         elif self.state == DoorRoomState.TURNING_RIGHT_180:
             self.turn_right_180_degrees()
-            
-        # elif self.state == DoorRoomState.SCANNING_FOR_DOOR:
-        #     self.scan_for_door()
             
         elif self.state == DoorRoomState.PASSING_THROUGH_DOOR:
             self.pass_through_door()
