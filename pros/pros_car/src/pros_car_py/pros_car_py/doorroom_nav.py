@@ -69,6 +69,10 @@ class DoorRoomNav(Node):
         self.pikachu_detected = False
         self.delta_x = 0.0  # 像素偏移（左負右正）
         self.pikachu_total_area = 0.0
+
+        # === 最終接近階段 === 
+        self.final_approach_start_time = None
+        self.final_approach_duration = 1.0
         
         # === 移動計時 ===
         self.move_start_time = None
@@ -482,7 +486,7 @@ class DoorRoomNav(Node):
             # 已經開始計時，檢查是否達到2秒
             elapsed = (self.clock.now() - self.move_start_time).nanoseconds / 1e9
             
-            if elapsed < 1.0:  # 看不到灰色後再走2秒
+            if elapsed < 1.3:  # 看不到灰色後再走2秒
                 self.publish_car_control("FORWARD")
             else:
                 # 完成通過門
