@@ -30,8 +30,7 @@ setup(
             "arm_test = pros_car_py.arm_test:main",
             "lidar_trans = pros_car_py.lidar_trans:main",
             # === 皮卡丘導航節點 ===
-            "pikachu_nav_hell = pros_car_py.pikachu_nav_hell:main",  # Hell模式
-            "pikachu_nav_hard = pros_car_py.pikachu_nav_hard:main",  # Hard模式
+            "livingroom_nav = pros_car_py.livingroom_nav:main", 
         ],
     },
 )

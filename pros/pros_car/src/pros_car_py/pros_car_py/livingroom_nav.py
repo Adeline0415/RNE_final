@@ -19,7 +19,7 @@ class SimpleState(Enum):
     OBSTACLE_AVOIDANCE = auto() # 避障
     SUCCESS = auto()            # 成功
 
-class PikachuNavHell(Node):
+class LivingRoomNav(Node):
     def __init__(self):
         super().__init__('pikachu_nav_hell')
         
@@ -372,7 +372,7 @@ class PikachuNavHell(Node):
 def main(args=None):
     rclpy.init(args=args)
     
-    node = PikachuNavHell()
+    node = LivingRoomNav()
     
     try:
         rclpy.spin(node)
