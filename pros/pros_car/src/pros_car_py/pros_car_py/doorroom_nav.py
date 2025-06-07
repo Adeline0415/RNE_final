@@ -637,8 +637,8 @@ class DoorRoomNav(Node):
 
         # 檢查是否滿足進入最終接近的條件
         approach_elapsed = (self.clock.now() - self.approach_start_time).nanoseconds / 1e9
-        area_reached = self.pikachu_total_area > self.target_area_threshold
-        timeout_reached = approach_elapsed >= 4.5  # 4.5秒超時
+        area_reached = (self.pikachu_total_area > self.target_area_threshold) and ((self.last_door == 0) or (self.last_door == 3))
+        timeout_reached = approach_elapsed >= 4.0  # 4秒超時
         
         # 面積達標或超時6秒，進入最終接近階段
         if area_reached or timeout_reached:
@@ -719,7 +719,7 @@ class DoorRoomNav(Node):
         Args:
             x1, y1, x2, y2: 水平線的座標
         Returns:
-            str: 主要顏色名稱 ("brown", "blue", "gray", "white") 或 None
+            str: 主要顏色名稱 ("brown", "blue") 或 None
         """
         try:
             # 確定水平線的範圍
@@ -746,7 +746,7 @@ class DoorRoomNav(Node):
                     return None
                 
                 total_pixels = region.shape[0] * region.shape[1]
-                target_colors = ['blue', 'gray', 'brown', 'white', 'light_blue']  # 只考慮這四種顏色
+                target_colors = ['blue', 'brown', 'light_blue']  # 只考慮這四種顏色
                 color_results = {}
                 
                 # 只檢查指定的四種顏色在區域中的比例
