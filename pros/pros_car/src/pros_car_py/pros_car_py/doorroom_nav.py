@@ -55,7 +55,7 @@ class DoorRoomNav(Node):
         # === 門的位置管理 ===
         self.doors_passed = 0  # 已通過的門數量
         # self.door_distance_move_time = 2.9  # 移動到下一個門位置的時間 fast
-        self.door_distance_move_time = 6.1
+        self.door_distance_move_time = 6.2
 
         # === 門位置追蹤系統 ===
         self.door_bitmap = [0, 0, 0, 0]  # 確保最先初始化
@@ -63,7 +63,7 @@ class DoorRoomNav(Node):
         self.last_door = -1
         self.door_positions = [0, 1, 2, 3]
         # self.single_door_move_time = 2.9 #fast
-        self.single_door_move_time = 6.1
+        self.single_door_move_time = 6.2
         
         # === 牆壁檢測 ===
         self.wall_color_range = None  # 將在運行時設定
@@ -478,7 +478,7 @@ class DoorRoomNav(Node):
                 self.change_state(DoorRoomState.PASSING_THROUGH_DOOR)
                 return
             
-            if has_line and color == "blue" and cur_dir != CarDirection.LEFT:
+            if has_line and color == "blue" and elapsed > self.quarter_rotation_mid_clockwise_time:
                 self.get_logger().info("180度轉向完成 檢測到牆壁水平線，往前移動到下一個門位置")
                 self.move_start_time = None
                 self.change_state(DoorRoomState.MOVING_TO_RIGHT_DOOR)
@@ -533,7 +533,7 @@ class DoorRoomNav(Node):
                 self.change_state(DoorRoomState.PASSING_THROUGH_DOOR)
                 return
             
-            if has_line and color == "blue" and cur_dir != CarDirection.RIGHT:
+            if has_line and color == "blue" and elapsed > self.quarter_rotation_mid_counterclockwise_time:
                 self.get_logger().info("180度轉向完成 檢測到牆壁水平線，轉180回右邊")
                 self.car_direction = CarDirection.LEFT
                 self.move_start_time = None
