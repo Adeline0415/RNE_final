@@ -11,17 +11,21 @@ vel, rotate_vel為自走車PID數值, 可於arduino程式碼查看
 """
 vel = 12.0
 vel_fast = 24.0
+vel_run = 40.0
 vel_slow = 5.0
 rotate_vel = 8.0
 rotate_vel_slow = 4.5
 rotate_vel_median = 5.0
-delta = 0.25
+delta = 1
 ACTION_MAPPINGS = {
     "FORWARD": [vel, vel, vel, vel],  # 前進
+    "FORWARD_RUN": [vel_run, vel_run, vel_run, vel_run],  # 前進
     "FORWARD_FAST": [vel_fast, vel_fast, vel_fast, vel_fast],  # 前進
     "FORWARD_SLOW": [vel_slow, vel_slow, vel_slow, vel_slow],  # 前進
-    "FORWARD_WITH_LEFT_CORRECTION" : [vel, vel + delta, vel, vel + delta],
-    "FORWARD_WITH_RIGHT_CORRECTION" : [vel + delta, vel, vel + delta, vel],
+    "FORWARD_WITH_LEFT_CORRECTION": [vel, vel + delta, vel, vel + delta],
+    "FORWARD_WITH_RIGHT_CORRECTION": [vel + delta, vel, vel + delta, vel],
+    "FORWARD_FAST_WITH_LEFT_CORRECTION": [vel_fast, vel_fast + 1, vel_fast, vel_fast + 1],
+    "FORWARD_FAST_WITH_RIGHT_CORRECTION": [vel_fast + 1, vel_fast, vel_fast + 1, vel_fast],
     "LEFT_FRONT": [rotate_vel, rotate_vel * 1.2, rotate_vel, rotate_vel * 1.2],  # 左前
     "COUNTERCLOCKWISE_ROTATION": [
         -rotate_vel,
@@ -42,6 +46,7 @@ ACTION_MAPPINGS = {
         rotate_vel_median,
     ],  # 中速左自轉
     "BACKWARD": [-vel, -vel, -vel, -vel],  # 後退
+    "BACKWARD_RUN": [-vel_run, -vel_run, -vel_run, -vel_run],
     "BACKWARD_SLOW": [-vel_slow, -vel_slow, -vel_slow, -vel_slow],  # 後退
     "CLOCKWISE_ROTATION": [rotate_vel, -rotate_vel, rotate_vel, -rotate_vel],  # 右自轉
     "CLOCKWISE_ROTATION_SLOW": [

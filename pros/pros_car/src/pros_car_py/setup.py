@@ -31,7 +31,7 @@ setup(
             "lidar_trans = pros_car_py.lidar_trans:main",
             # === 皮卡丘導航節點 ===
             "livingroom_nav = pros_car_py.livingroom_nav:main", 
-            "doorroom_nav = pros_car_py.doorroom_nav:main"
+            "doorroom_nav = pros_car_py.doorroom_nav:main",
             "doorroom_fast_nav = pros_car_py.doorroom_fast_nav:main"
         ],
     },

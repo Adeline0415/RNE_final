@@ -49,7 +49,7 @@ class DoorRoomNav(Node):
         self.rotation_start_time = None
         self.quarter_rotation_clockwise_time = 2.25 
         self.quarter_rotation_counterclockwise_time = 2.75
-        self.quarter_rotation_mid_clockwise_time = 7.8 #7.75 #7.5
+        self.quarter_rotation_mid_clockwise_time = 8.0 #7.75 #7.5
         self.quarter_rotation_mid_counterclockwise_time = 11.75 # 11.25
 
         # === 門的位置管理 ===
@@ -85,7 +85,7 @@ class DoorRoomNav(Node):
         # === 移動計時 ===
         self.move_start_time = None
         self.scan_start_time = None
-        self.turn_duration_left = 12.25  #timeout
+        self.turn_duration_left = 12.5  #timeout
         self.turn_duration_right = 10.0  #timeout
 
 
@@ -104,12 +104,22 @@ class DoorRoomNav(Node):
             'brown': {
                 'target_bgr': [90, 133, 190], 
                 'lower': np.array([75, 117, 175]),
-                'upper': np.array([110, 163, 220])
+                'upper': np.array([120, 163, 220])
             },
             'white': {
                 'target_bgr': [250, 250, 250], 
                 'lower': np.array([240, 240, 240]),
                 'upper': np.array([255, 255, 255])
+            },
+            'light_blue': {
+                'target_bgr': [222, 203, 136], #229 200 133, 216 197 130
+                'lower': np.array([202, 183, 116]),
+                'upper': np.array([242, 223, 156])
+            },
+            'yellow':{
+                'target_bgr': [11, 228, 248], 
+                'lower': np.array([0, 220, 240]),
+                'upper': np.array([20, 245, 255])
             }
         }
                 
@@ -271,10 +281,11 @@ class DoorRoomNav(Node):
             self.get_logger().info(f"畫面平均RGB: R={r:.1f}, G={g:.1f}, B={b:.1f}")
             
             # 檢查各種顏色比例
+            light_blue_ratio = self.check_color_ratio("light_blue")
             blue_ratio = self.check_color_ratio("blue")
             gray_ratio = self.check_color_ratio("gray")
             brown_ratio = self.check_color_ratio("brown")
-            self.get_logger().info(f"顏色比例 - 藍色: {blue_ratio:.3f}, 灰色: {gray_ratio:.3f}, 棕色: {brown_ratio:.3f}")
+            self.get_logger().info(f"顏色比例 - 藍色: {blue_ratio:.3f}, 灰色: {gray_ratio:.3f}, 棕色: {brown_ratio:.3f}, 淺藍色: {light_blue_ratio:.3f}")
 
         self.get_logger().info(f"現在車頭方向:{self.get_current_direction()}")
 
@@ -429,20 +440,20 @@ class DoorRoomNav(Node):
             cur_dir = self.get_current_direction()
             has_line, color, angle = self.detect_horizontal_line()
             # 顏色版本
-            if has_line and color == "brown" and (self.check_color_ratio("gray") > 0.1):
+            if has_line and color == "brown" and (self.check_color_ratio("gray") > 0.03):
                 self.get_logger().info("轉向過程中檢測到門的水平線！")
                 # self.car_direction = CarDirection.FORWARD
                 self.move_start_time = None
                 self.change_state(DoorRoomState.PASSING_THROUGH_DOOR)
                 return
             
-            if has_line and (self.doors_passed == 2) and (cur_dir != CarDirection.LEFT): ## 最後一層
+            if has_line and (self.doors_passed == 2) and (cur_dir != CarDirection.LEFT) and ((self.check_color_ratio("yellow") > 0.05) or (self.check_color_ratio("brown") < 0.1) or (self.check_color_ratio("light_blue") > 0.3) or (color == "light_blue")): ## 最後一層
                 self.get_logger().info("轉向過程中檢測到門的水平線！")
                 self.move_start_time = None
                 self.change_state(DoorRoomState.PASSING_THROUGH_DOOR)
                 return
             
-            if has_line and color == "blue" and elapsed > self.quarter_rotation_mid_clockwise_time:
+            if has_line and color == "blue" and (elapsed > self.quarter_rotation_mid_clockwise_time):
                 self.get_logger().info("180度轉向完成 檢測到牆壁水平線，往前移動到下一個門位置")
                 self.move_start_time = None
                 self.change_state(DoorRoomState.MOVING_TO_RIGHT_DOOR)
@@ -465,20 +476,20 @@ class DoorRoomNav(Node):
             #顏色檢測
             has_line, color, angle = self.detect_horizontal_line()
             cur_dir = self.get_current_direction()
-            if has_line and color == "brown" and (self.check_color_ratio("gray") > 0.1):
+            if has_line and color == "brown" and (self.check_color_ratio("gray") > 0.03):
                 self.get_logger().info("轉向過程中檢測到門的水平線！")
                 self.move_start_time = None
                 self.change_state(DoorRoomState.PASSING_THROUGH_DOOR)
                 return
             
-            if has_line and (self.doors_passed == 2) and (cur_dir == CarDirection.FORWARD):
+            if has_line and (self.doors_passed == 2) and (cur_dir != CarDirection.LEFT) and ((self.check_color_ratio("yellow") > 0.05) or (self.check_color_ratio("brown") < 0.1) or (self.check_color_ratio("light_blue") > 0.3) or (color == "light_blue")):
                 self.get_logger().info("轉向過程中檢測到門的水平線！")
                 self.car_direction = CarDirection.FORWARD
                 self.move_start_time = None
                 self.change_state(DoorRoomState.PASSING_THROUGH_DOOR)
                 return
             
-            if has_line and color == "blue" and elapsed > self.quarter_rotation_mid_counterclockwise_time:
+            if has_line and color == "blue" and (elapsed > self.quarter_rotation_mid_counterclockwise_time):
                 self.get_logger().info("180度轉向完成 檢測到牆壁水平線，轉180回右邊")
                 self.car_direction = CarDirection.LEFT
                 self.move_start_time = None
@@ -663,7 +674,7 @@ class DoorRoomNav(Node):
                         angle_with_sign = 90
                     
                     # 水平線角度應該接近0度
-                    if angle <= 0.01:  # 允許5度誤差
+                    if angle <= 0.03:  # 允許5度誤差
                         # 檢測水平線上方的顏色
                         color = self.get_color_above_line(x1, y1, x2, y2)
                         
@@ -805,11 +816,11 @@ class DoorRoomNav(Node):
         if abs(tilt_angle) <= angle_threshold:
             return "FORWARD"
         elif tilt_angle > correction_threshold:
-            self.get_logger().info(f"水平線左側高 {tilt_angle:.2f}度，向右校正")
-            return "FORWARD_WITH_RIGHT_CORRECTION"
-        elif tilt_angle < -correction_threshold:
-            self.get_logger().info(f"水平線右側高 {abs(tilt_angle):.2f}度，向左校正")
+            self.get_logger().info(f"水平線右側高 {tilt_angle:.2f}度，向左校正")
             return "FORWARD_WITH_LEFT_CORRECTION"
+        elif tilt_angle < -correction_threshold:
+            self.get_logger().info(f"水平線左側高 {abs(tilt_angle):.2f}度，向左右校正")
+            return "FORWARD_WITH_RIGHT_CORRECTION"
         else:
             return "FORWARD"
         

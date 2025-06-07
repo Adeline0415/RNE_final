@@ -169,7 +169,7 @@ class LivingRoomNav(Node):
         if self.final_approach_start_time is not None:
             elapsed = (self.clock.now() - self.final_approach_start_time).nanoseconds / 1e9
             if elapsed < self.final_approach_duration:
-                self.publish_car_control("FORWARD")
+                self.publish_car_control("FORWARD_RUN")
                 remaining_time = self.final_approach_duration - elapsed
                 self.get_logger().info(f"最終接近中...剩餘{remaining_time:.1f}秒")
             else:
@@ -189,7 +189,7 @@ class LivingRoomNav(Node):
             else:
                 self.publish_car_control("CLOCKWISE_ROTATION")
         else:
-            self.publish_car_control("FORWARD")
+            self.publish_car_control("FORWARD_RUN")
             self.get_logger().info(f"前進接近 (面積: {self.pikachu_total_area:.0f}px²)")
 
     def calculate_image_similarity(self, img1, img2):
@@ -260,7 +260,7 @@ class LivingRoomNav(Node):
     def check_pikachu_area_stagnation(self, current_time):
         """皮卡丘面積停滯檢測方法"""
         # 只有在檢測到皮卡丘且正在前進時才檢查
-        if not self.pikachu_detected or self.current_action != "FORWARD":
+        if not self.pikachu_detected or self.current_action != "FORWARD_RUN":
             return False
         
         # 初始化面積檢查時間
@@ -321,11 +321,11 @@ class LivingRoomNav(Node):
         
         if elapsed < current_duration:
             if self.obstacle_phase == 0:
-                self.publish_car_control("BACKWARD")
+                self.publish_car_control("BACKWARD_RUN")
             elif self.obstacle_phase == 1:
                 self.publish_car_control("CLOCKWISE_ROTATION")
             elif self.obstacle_phase == 2:
-                self.publish_car_control("FORWARD")
+                self.publish_car_control("FORWARD_RUN")
             elif self.obstacle_phase == 3:
                 self.publish_car_control("COUNTERCLOCKWISE_ROTATION")
         else:
