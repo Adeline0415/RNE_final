@@ -856,11 +856,11 @@ class DoorRoomNav(Node):
         if abs(tilt_angle) <= angle_threshold:
             return "FORWARD"
         elif tilt_angle > correction_threshold:
-            self.get_logger().info(f"水平線右側高 {tilt_angle:.2f}度，向左校正")
-            return "FORWARD_WITH_LEFT_CORRECTION"
-        elif tilt_angle < -correction_threshold:
-            self.get_logger().info(f"水平線左側高 {abs(tilt_angle):.2f}度，向右校正")
+            self.get_logger().info(f"水平線右側高 {tilt_angle:.2f}度，向右校正")
             return "FORWARD_WITH_RIGHT_CORRECTION"
+        elif tilt_angle < -correction_threshold:
+            self.get_logger().info(f"水平線左側高 {abs(tilt_angle):.2f}度，向左校正")
+            return "FORWARD_WITH_LEFT_CORRECTION"
         else:
             return "FORWARD"
         
@@ -870,10 +870,10 @@ class DoorRoomNav(Node):
         
         if correction_action == "FORWARD_WITH_LEFT_CORRECTION":
             # 前進 + 輕微左轉校正
-            self.publish_car_control("LEFT_FRONT")
+            self.publish_car_control("FORWARD_WITH_LEFT_CORRECTION")
         elif correction_action == "FORWARD_WITH_RIGHT_CORRECTION":
             # 前進 + 輕微右轉校正
-            self.publish_car_control("RIGHT_FRONT")
+            self.publish_car_control("FORWARD_WITH_RIGHT_CORRECTION")
         else:
             # 正常前進
             self.publish_car_control("FORWARD")
