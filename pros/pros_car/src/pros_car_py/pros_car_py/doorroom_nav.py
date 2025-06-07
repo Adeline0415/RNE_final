@@ -80,7 +80,7 @@ class DoorRoomNav(Node):
 
         # === 最終接近階段 === 
         self.final_approach_start_time = None
-        self.final_approach_duration = 0.5
+        self.final_approach_duration = 2.5
         
         # === 移動計時 ===
         self.move_start_time = None
@@ -562,7 +562,7 @@ class DoorRoomNav(Node):
             
             # if elapsed < 0.65 or ((elapsed < 1.25) and (self.doors_passed==2)):  # 看不到灰色後再走幾秒
             #     self.publish_car_control("FORWARD")
-            if elapsed < 1.3 or ((elapsed < 2.5) and (self.doors_passed==2)):  # 看不到灰色後再走幾秒
+            if elapsed < 1.3 or ((elapsed < 3.5) and (self.doors_passed==2)):  # 看不到灰色後再走幾秒
                 self.publish_car_control("FORWARD")
             else:
                 # 完成通過門
@@ -633,7 +633,10 @@ class DoorRoomNav(Node):
 
     def scan_for_pikachu(self):
         """掃描皮卡丘"""
-        self.publish_car_control("COUNTERCLOCKWISE_ROTATION")
+        if self.last_door < 2:
+            self.publish_car_control("CLOCKWISE_ROTATION")
+        else:
+            self.publish_car_control("COUNTERCLOCKWISE_ROTATION")
         self.get_logger().info("掃描皮卡丘中...")
 
     def approach_pikachu(self):
