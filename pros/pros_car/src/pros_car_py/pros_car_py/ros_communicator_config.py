@@ -15,10 +15,13 @@ vel_slow = 5.0
 rotate_vel = 8.0
 rotate_vel_slow = 4.5
 rotate_vel_median = 5.0
+delta = 0.1
 ACTION_MAPPINGS = {
     "FORWARD": [vel, vel, vel, vel],  # 前進
     "FORWARD_FAST": [vel_fast, vel_fast, vel_fast, vel_fast],  # 前進
     "FORWARD_SLOW": [vel_slow, vel_slow, vel_slow, vel_slow],  # 前進
+    "FORWARD_WITH_LEFT_CORRECTION" : [vel, vel + delta, vel, vel + delta],
+    "FORWARD_WITH_RIGHT_CORRECTION" : [vel + delta, vel, vel + delta, vel],
     "LEFT_FRONT": [rotate_vel, rotate_vel * 1.2, rotate_vel, rotate_vel * 1.2],  # 左前
     "COUNTERCLOCKWISE_ROTATION": [
         -rotate_vel,
