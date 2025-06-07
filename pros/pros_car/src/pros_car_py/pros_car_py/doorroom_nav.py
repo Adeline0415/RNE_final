@@ -49,8 +49,8 @@ class DoorRoomNav(Node):
         self.rotation_start_time = None
         self.quarter_rotation_clockwise_time = 2.25 
         self.quarter_rotation_counterclockwise_time = 2.75
-        self.quarter_rotation_mid_clockwise_time = 8.0 #7.75 #7.5
-        self.quarter_rotation_mid_counterclockwise_time = 11.75 # 11.25
+        self.quarter_rotation_mid_clockwise_time = 8.75 #7.75 #7.5
+        self.quarter_rotation_mid_counterclockwise_time = 12.25 # 11.25
 
         # === 門的位置管理 ===
         self.doors_passed = 0  # 已通過的門數量
@@ -86,8 +86,8 @@ class DoorRoomNav(Node):
         # === 移動計時 ===
         self.move_start_time = None
         self.scan_start_time = None
-        self.turn_duration_left = 12.5  #timeout
-        self.turn_duration_right = 10.0  #timeout
+        self.turn_duration_left = 13.75  #timeout
+        self.turn_duration_right = 11.0  #timeout
 
 
         # === 顏色檢測系統 ===
@@ -103,9 +103,9 @@ class DoorRoomNav(Node):
                 'upper': np.array([145, 140, 140])
             },
             'brown': {
-                'target_bgr': [90, 133, 190], 
-                'lower': np.array([75, 117, 175]),
-                'upper': np.array([120, 163, 220])
+                'target_bgr': [90, 133, 190], #115 138 170 #102 142 191 # 170 138 115 #84 113 150 #122 144 178
+                'lower': np.array([65, 95, 135]),
+                'upper': np.array([137, 185, 235])
             },
             'white': {
                 'target_bgr': [250, 250, 250], 
@@ -448,7 +448,13 @@ class DoorRoomNav(Node):
                 self.change_state(DoorRoomState.PASSING_THROUGH_DOOR)
                 return
             
-            if has_line and (self.doors_passed == 2) and (cur_dir != CarDirection.LEFT) and ((self.check_color_ratio("yellow") > 0.05) or (self.check_color_ratio("brown") < 0.1) or (self.check_color_ratio("light_blue") > 0.3)): ## 最後一層
+            if has_line and (self.doors_passed == 2) and (cur_dir != CarDirection.LEFT) and ((self.cur_door == 0) or (self.cur_door == 3)) and ((self.check_color_ratio("brown") < 0.1) or (self.check_color_ratio("light_blue") > 0.3)): ## 最後一層
+                self.get_logger().info("轉向過程中檢測到門的水平線！")
+                self.move_start_time = None
+                self.change_state(DoorRoomState.PASSING_THROUGH_DOOR)
+                return
+            
+            if has_line and (self.doors_passed == 2) and ((self.cur_door == 1) or (self.cur_door == 2)) and ((self.check_color_ratio("yellow") > 0) or (self.check_color_ratio("light_blue")>0.45)): ## 最後一層間一定看得到皮卡丘
                 self.get_logger().info("轉向過程中檢測到門的水平線！")
                 self.move_start_time = None
                 self.change_state(DoorRoomState.PASSING_THROUGH_DOOR)
@@ -483,9 +489,14 @@ class DoorRoomNav(Node):
                 self.change_state(DoorRoomState.PASSING_THROUGH_DOOR)
                 return
             
-            if has_line and (self.doors_passed == 2) and (cur_dir != CarDirection.LEFT) and ((self.check_color_ratio("yellow") > 0.05) or (self.check_color_ratio("brown") < 0.1) or (self.check_color_ratio("light_blue") > 0.3)):
+            if has_line and (self.doors_passed == 2) and (cur_dir != CarDirection.RIGHT) and ((self.cur_door == 0) or (self.cur_door == 3)) and ((self.check_color_ratio("brown") < 0.1) or (self.check_color_ratio("light_blue") > 0.3)): ## 最後一層
                 self.get_logger().info("轉向過程中檢測到門的水平線！")
-                self.car_direction = CarDirection.FORWARD
+                self.move_start_time = None
+                self.change_state(DoorRoomState.PASSING_THROUGH_DOOR)
+                return
+            
+            if has_line and (self.doors_passed == 2) and ((self.cur_door == 1) or (self.cur_door == 2)) and ((self.check_color_ratio("yellow") > 0) or (self.check_color_ratio("light_blue")>0.45)): ## 最後一層間一定看得到皮卡丘
+                self.get_logger().info("轉向過程中檢測到門的水平線！")
                 self.move_start_time = None
                 self.change_state(DoorRoomState.PASSING_THROUGH_DOOR)
                 return
@@ -521,7 +532,7 @@ class DoorRoomNav(Node):
             
             # if elapsed < 0.65 or ((elapsed < 1.25) and (self.doors_passed==2)):  # 看不到灰色後再走幾秒
             #     self.publish_car_control("FORWARD")
-            if elapsed < 1.3 or ((elapsed < 3.5) and (self.doors_passed==2)):  # 看不到灰色後再走幾秒
+            if ((elapsed < 1.3) and (self.doors_passed==0)) or ((elapsed < 1.75) and (self.doors_passed==1))or ((elapsed < 3.5) and (self.doors_passed==2)):  # 看不到灰色後再走幾秒
                 self.publish_car_control("FORWARD")
             else:
                 # 完成通過門
@@ -592,7 +603,7 @@ class DoorRoomNav(Node):
 
     def customized_final_approach_time(self):
         if self.last_door == 0 or self.last_door == 3:
-            return self.final_approach_duration + 1.5
+            return self.final_approach_duration + 1.0
         else:
             return self.final_approach_duration
 
@@ -627,7 +638,7 @@ class DoorRoomNav(Node):
         # 檢查是否滿足進入最終接近的條件
         approach_elapsed = (self.clock.now() - self.approach_start_time).nanoseconds / 1e9
         area_reached = self.pikachu_total_area > self.target_area_threshold
-        timeout_reached = approach_elapsed >= 5.0  # 5秒超時
+        timeout_reached = approach_elapsed >= 4.5  # 4.5秒超時
         
         # 面積達標或超時6秒，進入最終接近階段
         if area_reached or timeout_reached:
