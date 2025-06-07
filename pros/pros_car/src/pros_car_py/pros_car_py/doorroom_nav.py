@@ -80,7 +80,7 @@ class DoorRoomNav(Node):
 
         # === 最終接近階段 === 
         self.final_approach_start_time = None
-        self.final_approach_duration = 2.5
+        self.final_approach_duration = 3.0
         
         # === 移動計時 ===
         self.move_start_time = None
@@ -631,6 +631,10 @@ class DoorRoomNav(Node):
             self.move_start_time = None
             self.change_state(DoorRoomState.TURNING_RIGHT_180)
 
+    def customized_final_approach_time(self):
+        if self.last_door == 0 or self.last_door == 3:
+            self.final_approach_duration += 1.5
+
     def scan_for_pikachu(self):
         """掃描皮卡丘"""
         if self.last_door < 2:
@@ -643,6 +647,7 @@ class DoorRoomNav(Node):
         """接近皮卡丘 - 當面積達到閾值時進入最終階段"""
         # 如果已經在最終接近階段，直接執行不受檢測影響
         if self.final_approach_start_time is not None:
+            self.customized_final_approach_time()
             elapsed = (self.clock.now() - self.final_approach_start_time).nanoseconds / 1e9
             if elapsed < self.final_approach_duration:
                 self.publish_car_control("FORWARD")
@@ -651,10 +656,6 @@ class DoorRoomNav(Node):
             else:
                 self.change_state(DoorRoomState.SUCCESS)
             return  
-
-        # if not self.pikachu_detected:
-        #     self.final_approach_start_time = self.clock.now()
-        #     return
 
         # 面積未達標，繼續對準和接近（原有邏輯）
         if self.pikachu_total_area > self.target_area_threshold:
@@ -678,7 +679,7 @@ class DoorRoomNav(Node):
             tuple: (是否有水平線 bool, 上方主要顏色 str or None)
         """
         if self.current_rgb_image is None:
-            return False, None
+            return False, None, None
         
         try:
             gray = cv2.cvtColor(self.current_rgb_image, cv2.COLOR_BGR2GRAY)
@@ -790,16 +791,67 @@ class DoorRoomNav(Node):
             self.get_logger().error(f"檢測線上方顏色錯誤: {e}")
         return None
     
+    def detect_wide_horizontal_line(self):
+        """檢測水平線並返回上方顏色
+        Returns:
+            tuple: (是否有水平線 bool, 上方主要顏色 str or None)
+        """
+        if self.current_rgb_image is None:
+            return False, None
+        
+        try:
+            gray = cv2.cvtColor(self.current_rgb_image, cv2.COLOR_BGR2GRAY)
+            edges = cv2.Canny(gray, 50, 150, apertureSize=3)
+            lines = cv2.HoughLinesP(
+                edges,
+                rho=1,
+                theta=np.pi/180,
+                threshold=80,
+                minLineLength=30,
+                maxLineGap=10
+            )
+        
+            if lines is not None:
+                for line in lines:
+                    x1, y1, x2, y2 = line[0]
+                    
+                    # 計算線段長度
+                    length = ((x2-x1)**2 + (y2-y1)**2)**0.5
+                    
+                    # 只檢查夠長的線段
+                    if length < 50:  # 最小長度閾值
+                        continue
+                        
+                    # 計算斜率角度
+                    if x2 - x1 != 0:
+                        slope = (y2 - y1) / (x2 - x1)
+                        angle = abs(math.atan(slope) * 180 / math.pi)
+                        angle_with_sign = math.atan(slope) * 180 / math.pi  # 保留正負號
+                    else:
+                        angle = 90  # 垂直線
+                        angle_with_sign = 90
+                    
+                    # 水平線角度應該接近0度
+                    if angle <= 3:  # 允許5度誤差
+                        self.get_logger().info(f"檢測到水平線: ({x1},{y1}) -> ({x2},{y2}), 傾斜角度: {angle_with_sign:.2f}度")
+                        return True, angle_with_sign
+            
+            return False, None
+            
+        except Exception as e:
+            self.get_logger().error(f"水平線檢測錯誤: {e}")
+            return False, None
+    
     def correct_direction_with_horizontal_line(self):
         """根據水平線傾斜度校正行進方向"""
-        has_line, color, tilt_angle = self.detect_horizontal_line()
+        has_line, tilt_angle = self.detect_wide_horizontal_line()
         
         if not has_line or tilt_angle is None:
             self.get_logger().info("未檢測到水平線，直接前進")
             return "FORWARD"
         
-        angle_threshold = 2.0
-        correction_threshold = 5.0
+        angle_threshold = 0.5
+        correction_threshold = 0.5
         
         if abs(tilt_angle) <= angle_threshold:
             return "FORWARD"
