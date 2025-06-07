@@ -406,7 +406,7 @@ class DoorRoomNav(Node):
             elapsed = (self.clock.now() - self.move_start_time).nanoseconds / 1e9
             
             if elapsed < self.extra_move_duration:
-                self.publish_car_control("FORWARD")
+                self.publish_car_control("FORWARD_FAST")
                 remaining_time = self.extra_move_duration - elapsed
                 self.get_logger().info(f"到達牆壁後額外前進中...剩餘{remaining_time:.1f}秒")
             else:
@@ -497,7 +497,7 @@ class DoorRoomNav(Node):
         
         if self.move_start_time is None:
             # 還沒開始計時，繼續前進直到看不到灰色
-            self.publish_car_control("FORWARD")
+            self.publish_car_control("FORWARD_FAST")
             
             if gray_ratio == 0 or (self.doors_passed==2):
                 # 看不到灰色了，開始計時
@@ -507,10 +507,10 @@ class DoorRoomNav(Node):
             # 已經開始計時，檢查是否達到2秒
             elapsed = (self.clock.now() - self.move_start_time).nanoseconds / 1e9
             
-            # if elapsed < 0.65 or ((elapsed < 1.25) and (self.doors_passed==2)):  # 看不到灰色後再走幾秒
+            if elapsed < 0.65 or ((elapsed < 1.75) and (self.doors_passed==2)):  # 看不到灰色後再走幾秒
+                self.publish_car_control("FORWARD_FAST")
+            # if elapsed < 1.3 or ((elapsed < 3.5) and (self.doors_passed==2)):  # 看不到灰色後再走幾秒
             #     self.publish_car_control("FORWARD")
-            if elapsed < 1.3 or ((elapsed < 3.5) and (self.doors_passed==2)):  # 看不到灰色後再走幾秒
-                self.publish_car_control("FORWARD")
             else:
                 # 完成通過門
                 self.update_door_status(self.cur_door, passed=True)
@@ -599,7 +599,7 @@ class DoorRoomNav(Node):
             customized_final_approach_time = self.customized_final_approach_time()
             elapsed = (self.clock.now() - self.final_approach_start_time).nanoseconds / 1e9
             if elapsed < customized_final_approach_time:
-                self.publish_car_control("FORWARD")
+                self.publish_car_control("FORWARD_FAST")
                 remaining_time = customized_final_approach_time - elapsed
                 self.get_logger().info(f"最終接近中...剩餘{remaining_time:.1f}秒")
             else:
