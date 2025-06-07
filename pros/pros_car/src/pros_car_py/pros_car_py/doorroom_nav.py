@@ -810,8 +810,8 @@ class DoorRoomNav(Node):
             self.get_logger().info("未檢測到水平線，直接前進")
             return "FORWARD"
         
-        angle_threshold = 0.5
-        correction_threshold = 0.5
+        angle_threshold = 0.8
+        correction_threshold = 0.8
         
         if abs(tilt_angle) <= angle_threshold:
             return "FORWARD"
@@ -819,7 +819,7 @@ class DoorRoomNav(Node):
             self.get_logger().info(f"水平線右側高 {tilt_angle:.2f}度，向左校正")
             return "FORWARD_WITH_LEFT_CORRECTION"
         elif tilt_angle < -correction_threshold:
-            self.get_logger().info(f"水平線左側高 {abs(tilt_angle):.2f}度，向左右校正")
+            self.get_logger().info(f"水平線左側高 {abs(tilt_angle):.2f}度，向右校正")
             return "FORWARD_WITH_RIGHT_CORRECTION"
         else:
             return "FORWARD"

@@ -16,7 +16,7 @@ vel_slow = 5.0
 rotate_vel = 8.0
 rotate_vel_slow = 4.5
 rotate_vel_median = 5.0
-delta = 1
+delta = 0.75
 ACTION_MAPPINGS = {
     "FORWARD": [vel, vel, vel, vel],  # 前進
     "FORWARD_RUN": [vel_run, vel_run, vel_run, vel_run],  # 前進
