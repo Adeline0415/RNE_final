@@ -62,7 +62,7 @@ class LivingRoomNav(Node):
         # === 避障模式 === 
         self.obstacle_start_time = None
         self.obstacle_phase = 0
-        self.obstacle_durations = [0.167, 1.5, 0.5, 2.0] # [0.5, 1.5, 1.5, 2.0]
+        self.obstacle_durations = [0.2, 1.5, 0.6, 2.0] # [0.5, 1.5, 1.5, 2.0] # 12
 
         # 皮卡丘面積變化檢測
         self.pikachu_area_history = []  # 存儲歷史面積數據
@@ -72,7 +72,7 @@ class LivingRoomNav(Node):
             
         # === 最終接近階段 === 
         self.final_approach_start_time = None
-        self.final_approach_duration = 0.25
+        self.final_approach_duration = 0.3 #1.0
 
         self.current_action = "STOP"  # 初始狀態為停止
 

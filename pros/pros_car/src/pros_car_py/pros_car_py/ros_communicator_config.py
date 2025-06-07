@@ -11,7 +11,7 @@ vel, rotate_vel為自走車PID數值, 可於arduino程式碼查看
 """
 vel = 12.0
 vel_fast = 24.0
-vel_run = 40.0
+vel_run = 30.0
 vel_slow = 5.0
 rotate_vel = 8.0
 rotate_vel_slow = 4.5
