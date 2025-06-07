@@ -81,6 +81,7 @@ class DoorRoomNav(Node):
         # === 最終接近階段 === 
         self.final_approach_start_time = None
         self.final_approach_duration = 3.0
+        self.final_approach_total_duration = 7.5
         
         # === 移動計時 ===
         self.move_start_time = None
@@ -447,7 +448,7 @@ class DoorRoomNav(Node):
                 self.change_state(DoorRoomState.PASSING_THROUGH_DOOR)
                 return
             
-            if has_line and (self.doors_passed == 2) and (cur_dir != CarDirection.LEFT) and ((self.check_color_ratio("yellow") > 0.05) or (self.check_color_ratio("brown") < 0.1) or (self.check_color_ratio("light_blue") > 0.3) or (color == "light_blue")): ## 最後一層
+            if has_line and (self.doors_passed == 2) and (cur_dir != CarDirection.LEFT) and ((self.check_color_ratio("yellow") > 0.05) or (self.check_color_ratio("brown") < 0.1) or (self.check_color_ratio("light_blue") > 0.3)): ## 最後一層
                 self.get_logger().info("轉向過程中檢測到門的水平線！")
                 self.move_start_time = None
                 self.change_state(DoorRoomState.PASSING_THROUGH_DOOR)
@@ -482,7 +483,7 @@ class DoorRoomNav(Node):
                 self.change_state(DoorRoomState.PASSING_THROUGH_DOOR)
                 return
             
-            if has_line and (self.doors_passed == 2) and (cur_dir != CarDirection.LEFT) and ((self.check_color_ratio("yellow") > 0.05) or (self.check_color_ratio("brown") < 0.1) or (self.check_color_ratio("light_blue") > 0.3) or (color == "light_blue")):
+            if has_line and (self.doors_passed == 2) and (cur_dir != CarDirection.LEFT) and ((self.check_color_ratio("yellow") > 0.05) or (self.check_color_ratio("brown") < 0.1) or (self.check_color_ratio("light_blue") > 0.3)):
                 self.get_logger().info("轉向過程中檢測到門的水平線！")
                 self.car_direction = CarDirection.FORWARD
                 self.move_start_time = None
@@ -508,7 +509,7 @@ class DoorRoomNav(Node):
         
         if self.move_start_time is None:
             # 還沒開始計時，繼續前進直到看不到灰色
-            self.publish_car_control("FORWARD")
+            self.publish_corrected_forward_control()
             
             if gray_ratio == 0 or (self.doors_passed==2):
                 # 看不到灰色了，開始計時
@@ -606,6 +607,12 @@ class DoorRoomNav(Node):
     def approach_pikachu(self):
         """接近皮卡丘 - 當面積達到閾值時進入最終階段"""
         # 如果已經在最終接近階段，直接執行不受檢測影響
+        # 記錄開始接近的時間（只在第一次進入時記錄）
+        if not hasattr(self, 'approach_start_time') or self.approach_start_time is None:
+            self.approach_start_time = self.clock.now()
+            self.get_logger().info("開始接近皮卡丘，啟動計時器")
+        
+        # 如果已經在最終接近階段，直接執行不受檢測影響
         if self.final_approach_start_time is not None:
             customized_final_approach_time = self.customized_final_approach_time()
             elapsed = (self.clock.now() - self.final_approach_start_time).nanoseconds / 1e9
@@ -617,9 +624,18 @@ class DoorRoomNav(Node):
                 self.change_state(DoorRoomState.SUCCESS)
             return  
 
-        # 面積未達標，繼續對準和接近（原有邏輯）
-        if self.pikachu_total_area > self.target_area_threshold:
+        # 檢查是否滿足進入最終接近的條件
+        approach_elapsed = (self.clock.now() - self.approach_start_time).nanoseconds / 1e9
+        area_reached = self.pikachu_total_area > self.target_area_threshold
+        timeout_reached = approach_elapsed >= 5.0  # 5秒超時
+        
+        # 面積達標或超時6秒，進入最終接近階段
+        if area_reached or timeout_reached:
             self.final_approach_start_time = self.clock.now()
+            if area_reached:
+                self.get_logger().info(f"面積達標 ({self.pikachu_total_area:.0f}px²)，進入最終接近階段")
+            if timeout_reached:
+                self.get_logger().info(f"接近超時 ({approach_elapsed:.1f}秒)，強制進入最終接近階段")
             return
         
         alignment_threshold = 50
@@ -661,7 +677,7 @@ class DoorRoomNav(Node):
                     length = ((x2-x1)**2 + (y2-y1)**2)**0.5
                     
                     # 只檢查夠長的線段
-                    if length < 15:  # 最小長度閾值
+                    if length < 20:  # 最小長度閾值
                         continue
                         
                     # 計算斜率角度
@@ -674,7 +690,7 @@ class DoorRoomNav(Node):
                         angle_with_sign = 90
                     
                     # 水平線角度應該接近0度
-                    if angle <= 0.03:  # 允許5度誤差
+                    if angle <= 0.01:  # 允許5度誤差
                         # 檢測水平線上方的顏色
                         color = self.get_color_above_line(x1, y1, x2, y2)
                         
@@ -773,20 +789,22 @@ class DoorRoomNav(Node):
         
             if lines is not None:
                 for line in lines:
-                    x1, y1, x2, y2 = line[0]
+                    x1, y1, x2, y2 = line[0] # x1 小 x2大 --> x1 左 --> 
                     
                     # 計算線段長度
                     length = ((x2-x1)**2 + (y2-y1)**2)**0.5
-                    if length < 15:  # 最小長度閾值
+                    if length < 20:  # 最小長度閾值
                         continue
 
                     height = self.current_rgb_image.shape[0]
-                    if ((y1 > height/2) and (y2 > height/2)): # 是地板 會校正錯邊
-                        continue  
+                    is_ground = ((y1 > height/2) and (y2 > height/2)) 
                     
                     # 計算斜率角度
                     if x2 - x1 != 0:
-                        slope = (y2 - y1) / (x2 - x1)
+                        if is_ground: 
+                            slope = ((y2 - y1) / (x2 - x1)) #地板
+                        else:
+                            slope = -((y2 - y1) / (x2 - x1)) #右-左  天空  正: 右邊高往右轉 負:左邊高往左轉 
                         angle = abs(math.atan(slope) * 180 / math.pi)
                         angle_with_sign = math.atan(slope) * 180 / math.pi  # 保留正負號
                     else:
@@ -817,11 +835,11 @@ class DoorRoomNav(Node):
         
         if abs(tilt_angle) <= angle_threshold:
             return "FORWARD"
-        elif tilt_angle > correction_threshold:
+        elif tilt_angle > correction_threshold: # 正往右轉
             self.get_logger().info(f" {tilt_angle:.2f}度，向右校正")
             return "FORWARD_WITH_RIGHT_CORRECTION"
-        elif tilt_angle < -correction_threshold:
-            self.get_logger().info(f"{abs(tilt_angle):.2f}度，向左校正")
+        elif tilt_angle < -correction_threshold: #負往左轉
+            self.get_logger().info(f"{tilt_angle:.2f}度，向左校正")
             return "FORWARD_WITH_LEFT_CORRECTION"
         else:
             return "FORWARD"
