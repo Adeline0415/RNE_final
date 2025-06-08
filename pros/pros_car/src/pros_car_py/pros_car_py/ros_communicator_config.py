@@ -16,7 +16,8 @@ vel_slow = 5.0
 rotate_vel = 8.0
 rotate_vel_slow = 4.5
 rotate_vel_median = 5.0
-delta = 2.5
+delta = 4.0
+delta_f = 8.5
 ACTION_MAPPINGS = {
     "FORWARD": [vel, vel, vel, vel],  # 前進
     "FORWARD_RUN": [vel_run, vel_run, vel_run, vel_run],  # 前進
@@ -24,8 +25,8 @@ ACTION_MAPPINGS = {
     "FORWARD_SLOW": [vel_slow, vel_slow, vel_slow, vel_slow],  # 前進
     "FORWARD_WITH_LEFT_CORRECTION": [vel - delta, vel + delta, vel - delta, vel + delta],
     "FORWARD_WITH_RIGHT_CORRECTION": [vel + delta, vel - delta, vel + delta, vel - delta],
-    "FORWARD_FAST_WITH_LEFT_CORRECTION": [vel_fast, vel_fast + 1, vel_fast, vel_fast + 1],
-    "FORWARD_FAST_WITH_RIGHT_CORRECTION": [vel_fast + 1, vel_fast, vel_fast + 1, vel_fast],
+    "FORWARD_FAST_WITH_LEFT_CORRECTION": [vel - delta_f, vel + delta_f, vel - delta_f, vel + delta_f],
+    "FORWARD_FAST_WITH_RIGHT_CORRECTION": [vel + delta_f, vel - delta_f, vel + delta_f, vel - delta_f],
     "LEFT_FRONT": [rotate_vel, rotate_vel * 1.2, rotate_vel, rotate_vel * 1.2],  # 左前
     "COUNTERCLOCKWISE_ROTATION": [
         -rotate_vel,

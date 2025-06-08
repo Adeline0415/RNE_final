@@ -441,7 +441,7 @@ class DoorRoomNav(Node):
             cur_dir = self.get_current_direction()
             has_line, color, angle = self.detect_horizontal_line()
             # 顏色版本
-            if has_line and color == "brown" and (self.check_color_ratio("gray") > 0.03):
+            if has_line and color == "brown" and (self.check_color_ratio("gray") > 0.05) and (self.doors_passed != 2):
                 self.get_logger().info("轉向過程中檢測到門的水平線！")
                 # self.car_direction = CarDirection.FORWARD
                 self.move_start_time = None
@@ -483,7 +483,7 @@ class DoorRoomNav(Node):
             #顏色檢測
             has_line, color, angle = self.detect_horizontal_line()
             cur_dir = self.get_current_direction()
-            if has_line and color == "brown" and (self.check_color_ratio("gray") > 0.03):
+            if has_line and color == "brown" and (self.check_color_ratio("gray") > 0.05) and (self.doors_passed != 2):
                 self.get_logger().info("轉向過程中檢測到門的水平線！")
                 self.move_start_time = None
                 self.change_state(DoorRoomState.PASSING_THROUGH_DOOR)
